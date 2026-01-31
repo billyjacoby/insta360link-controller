@@ -86,7 +86,7 @@ void loop() {
         return;  // Skip normal loop when in portal mode
     }
 
-    // Check for portal request from serial
+    // Check for portal request from serial (AP mode)
     if (serialCli.portalRequested()) {
         serialCli.clearPortalRequest();
         wifiManager.disconnect();
@@ -94,6 +94,33 @@ void loop() {
         captivePortal.begin();
         portalMode = true;
         return;
+    }
+
+    // Check for webconfig request from serial (network mode)
+    if (serialCli.webConfigRequested()) {
+        serialCli.clearWebConfigRequest();
+        insta360Client.disconnect();
+        captivePortal.beginOnNetwork();
+        return;
+    }
+
+    // Handle network-mode web config (runs alongside normal operation)
+    if (captivePortal.isActive() && captivePortal.isNetworkMode()) {
+        captivePortal.update();
+        // Check if config was saved
+        if (captivePortal.isConfigured()) {
+            serialCli.setWifiConfig(
+                captivePortal.getWifiSsid(),
+                captivePortal.getWifiPassword()
+            );
+            serialCli.setServerConfig(
+                captivePortal.getWsHost(),
+                captivePortal.getWsPort(),
+                captivePortal.getWsToken()
+            );
+            Serial.println("[Main] Config saved via web interface");
+            // Don't reboot - let user decide when to apply
+        }
     }
 
     // Update all modules

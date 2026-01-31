@@ -8,12 +8,14 @@
 
 class CaptivePortal {
 public:
-    void begin();
+    void begin();           // Start in AP mode (creates WiFi network)
+    void beginOnNetwork();  // Start on existing WiFi network (STA mode)
     void update();
     void stop();
 
     bool isActive() const { return _active; }
     bool isConfigured() const { return _configured; }
+    bool isNetworkMode() const { return _networkMode; }
 
     // Get configured values after portal closes
     String getWifiSsid() const { return _wifiSsid; }
@@ -27,6 +29,7 @@ private:
     DNSServer _dnsServer;
     bool _active = false;
     bool _configured = false;
+    bool _networkMode = false;  // true = STA mode, false = AP mode
     unsigned long _startTime = 0;
 
     String _wifiSsid;
@@ -35,6 +38,7 @@ private:
     uint16_t _wsPort = 0;
     String _wsToken;
 
+    void setupRoutes();
     void handleRoot();
     void handleSave();
     void handleScan();

@@ -31,10 +31,15 @@ public:
     bool portalRequested() const { return _portalRequested; }
     void clearPortalRequest() { _portalRequested = false; }
 
+    // Request web config (on network)
+    bool webConfigRequested() const { return _webConfigRequested; }
+    void clearWebConfigRequest() { _webConfigRequested = false; }
+
 private:
     Preferences _prefs;
     String _inputBuffer;
     bool _portalRequested = false;
+    bool _webConfigRequested = false;
 
     String _wifiSsid;
     String _wifiPassword;

@@ -26,10 +26,14 @@
 // Serial CLI
 #define SERIAL_BAUD 115200
 
-// Captive portal
+// Captive portal (AP mode)
 #define AP_SSID "Insta360-Controller"
 #define AP_PASSWORD ""  // Open network for easy setup
 #define PORTAL_TIMEOUT_MS 180000  // 3 minutes
+
+// Development WiFi (uncomment and set for hardcoded WiFi)
+// #define DEV_WIFI_SSID "YourNetworkName"
+// #define DEV_WIFI_PASS "YourPassword"
 
 // Config storage keys (NVS)
 #define NVS_NAMESPACE "insta360"

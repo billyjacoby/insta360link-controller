@@ -197,6 +197,20 @@ void SerialCLI::processCommand(const String& line) {
         _portalRequested = true;
         Serial.println("Starting captive portal...");
     }
+    else if (cmd == "webconfig") {
+        if (!wifiManager.isConnected()) {
+            Serial.println("WiFi not connected. Use 'connect' or 'devwifi' first.");
+            return;
+        }
+        _webConfigRequested = true;
+        Serial.println("Starting web config server...");
+    }
+#ifdef DEV_WIFI_SSID
+    else if (cmd == "devwifi") {
+        Serial.println("Connecting to dev WiFi: " DEV_WIFI_SSID);
+        wifiManager.connect(DEV_WIFI_SSID, DEV_WIFI_PASS);
+    }
+#endif
     else if (cmd == "invertx") {
         _invertX = !_invertX;
         joystick.setInvertX(_invertX);
@@ -260,12 +274,16 @@ void SerialCLI::printHelp() {
     Serial.println("  port <port>             - Set WebSocket port");
     Serial.println("  token <token>           - Set auth token");
     Serial.println("  qr <url>                - Parse QR code URL (extracts port & token)");
-    Serial.println("  portal                  - Start WiFi config portal");
+    Serial.println("  portal                  - Start WiFi config portal (AP mode)");
+    Serial.println("  webconfig               - Start web config on current network");
     Serial.println();
     Serial.println("=== Connection ===");
     Serial.println("  connect                 - Connect to WiFi and camera");
     Serial.println("  disconnect              - Disconnect from server");
     Serial.println("  status                  - Show current status");
+#ifdef DEV_WIFI_SSID
+    Serial.println("  devwifi                 - Connect to dev WiFi (hardcoded)");
+#endif
     Serial.println();
     Serial.println("=== Joystick ===");
     Serial.println("  joy                     - Test joystick (5 sec)");

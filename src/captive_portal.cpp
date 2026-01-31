@@ -3,8 +3,17 @@
 
 CaptivePortal captivePortal;
 
+void CaptivePortal::setupRoutes() {
+    _server.on("/", HTTP_GET, [this]() { handleRoot(); });
+    _server.on("/save", HTTP_POST, [this]() { handleSave(); });
+    _server.on("/scan", HTTP_GET, [this]() { handleScan(); });
+    _server.onNotFound([this]() { handleNotFound(); });
+}
+
 void CaptivePortal::begin() {
-    Serial.println("[Portal] Starting captive portal...");
+    Serial.println("[Portal] Starting captive portal in AP mode...");
+
+    _networkMode = false;
 
     // Start AP
     WiFi.mode(WIFI_AP);
@@ -17,12 +26,7 @@ void CaptivePortal::begin() {
     // DNS server for captive portal redirect
     _dnsServer.start(53, "*", ip);
 
-    // Web server routes
-    _server.on("/", HTTP_GET, [this]() { handleRoot(); });
-    _server.on("/save", HTTP_POST, [this]() { handleSave(); });
-    _server.on("/scan", HTTP_GET, [this]() { handleScan(); });
-    _server.onNotFound([this]() { handleNotFound(); });
-
+    setupRoutes();
     _server.begin();
     _active = true;
     _configured = false;
@@ -32,14 +36,40 @@ void CaptivePortal::begin() {
     Serial.println("[Portal] Then open http://192.168.4.1");
 }
 
+void CaptivePortal::beginOnNetwork() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[Portal] Error: WiFi not connected. Connect first.");
+        return;
+    }
+
+    Serial.println("[Portal] Starting web config on network...");
+
+    _networkMode = true;
+
+    setupRoutes();
+    _server.begin();
+    _active = true;
+    _configured = false;
+    _startTime = millis();
+
+    Serial.println("[Portal] =================================");
+    Serial.print("[Portal] Open http://");
+    Serial.println(WiFi.localIP());
+    Serial.println("[Portal] =================================");
+}
+
 void CaptivePortal::update() {
     if (!_active) return;
 
-    _dnsServer.processNextRequest();
+    // DNS only needed in AP mode
+    if (!_networkMode) {
+        _dnsServer.processNextRequest();
+    }
+
     _server.handleClient();
 
-    // Timeout check
-    if (millis() - _startTime > PORTAL_TIMEOUT_MS) {
+    // Timeout check (only in AP mode - network mode stays open)
+    if (!_networkMode && millis() - _startTime > PORTAL_TIMEOUT_MS) {
         Serial.println("[Portal] Timeout, stopping portal");
         stop();
     }
@@ -49,10 +79,15 @@ void CaptivePortal::stop() {
     if (!_active) return;
 
     _server.stop();
-    _dnsServer.stop();
-    WiFi.softAPdisconnect(true);
-    WiFi.mode(WIFI_STA);
+
+    if (!_networkMode) {
+        _dnsServer.stop();
+        WiFi.softAPdisconnect(true);
+        WiFi.mode(WIFI_STA);
+    }
+
     _active = false;
+    _networkMode = false;
 
     Serial.println("[Portal] Stopped");
 }
@@ -101,18 +136,28 @@ void CaptivePortal::handleSave() {
 
     String response = "<!DOCTYPE html><html><head><meta charset='utf-8'>";
     response += "<meta name='viewport' content='width=device-width,initial-scale=1'>";
-    response += "<title>Saved</title></head><body style='font-family:sans-serif;padding:20px;'>";
-    response += "<h2>Configuration Saved!</h2>";
+    response += "<style>body{font-family:sans-serif;padding:20px;background:#1a1a2e;color:#eee}</style>";
+    response += "<title>Saved</title></head><body>";
+    response += "<h2 style='color:#0f9d58'>Configuration Saved!</h2>";
     response += "<p>WiFi: " + _wifiSsid + "</p>";
     response += "<p>Server: " + _wsHost + ":" + String(_wsPort) + "</p>";
-    response += "<p>The device will now restart and connect.</p>";
+
+    if (_networkMode) {
+        response += "<p>Settings saved. Use 'reboot' command to apply.</p>";
+        response += "<p><a href='/' style='color:#0f9d58'>Back to config</a></p>";
+    } else {
+        response += "<p>The device will now restart and connect.</p>";
+    }
+
     response += "</body></html>";
 
     _server.send(200, "text/html", response);
 
-    // Give time for response to send
-    delay(1000);
-    stop();
+    // In AP mode, stop and let main loop handle restart
+    if (!_networkMode) {
+        delay(1000);
+        stop();
+    }
 }
 
 void CaptivePortal::handleScan() {
@@ -127,9 +172,14 @@ void CaptivePortal::handleScan() {
 }
 
 void CaptivePortal::handleNotFound() {
-    // Redirect all requests to root (captive portal behavior)
-    _server.sendHeader("Location", "http://192.168.4.1/", true);
-    _server.send(302, "text/plain", "");
+    if (_networkMode) {
+        // In network mode, just return 404
+        _server.send(404, "text/plain", "Not found");
+    } else {
+        // In AP mode, redirect all requests to root (captive portal behavior)
+        _server.sendHeader("Location", "http://192.168.4.1/", true);
+        _server.send(302, "text/plain", "");
+    }
 }
 
 String CaptivePortal::urlDecode(const String& str) {
@@ -161,12 +211,13 @@ String CaptivePortal::generateHtml() {
 body{font-family:sans-serif;padding:20px;max-width:400px;margin:0 auto;background:#1a1a2e;color:#eee}
 h2{color:#0f9d58}
 input,select{width:100%;padding:10px;margin:5px 0 15px;border:1px solid #444;border-radius:4px;box-sizing:border-box;background:#16213e;color:#eee}
-button{background:#0f9d58;color:#fff;padding:12px 20px;border:none;border-radius:4px;cursor:pointer;width:100%;font-size:16px}
+button{background:#0f9d58;color:#fff;padding:12px 20px;border:none;border-radius:4px;cursor:pointer;width:100%;font-size:16px;margin:5px 0}
 button:hover{background:#0d8a4d}
 .section{background:#16213e;padding:15px;border-radius:8px;margin:15px 0}
 label{font-weight:bold;color:#aaa}
 .or{text-align:center;color:#666;margin:10px 0}
 a{color:#0f9d58}
+.note{background:#2d2d44;padding:10px;border-radius:4px;font-size:13px;color:#aaa;margin-top:15px}
 </style>
 </head><body>
 <h2>Insta360 Controller</h2>
@@ -199,8 +250,12 @@ a{color:#0f9d58}
 <input type='text' name='token' placeholder='From QR code'>
 </div>
 
-<button type='submit'>Save & Connect</button>
+<button type='submit'>Save Configuration</button>
 </form>
+
+<div class='note'>
+<strong>Tip:</strong> After saving, use the 'reboot' command in serial console to apply changes and connect.
+</div>
 
 <script>
 function scanWifi(){
@@ -210,6 +265,8 @@ function scanWifi(){
     nets.forEach(n=>html+='<option>'+n+'</option>');
     html+='</select>';
     document.getElementById('networks').innerHTML=html;
+  }).catch(e=>{
+    document.getElementById('networks').innerHTML='<span style="color:#f44">Scan failed</span>';
   });
 }
 </script>
