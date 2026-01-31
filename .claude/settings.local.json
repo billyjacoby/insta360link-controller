@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/jackwoods/Documents/GitHub/insta360link-joystick-controller status)",
+      "mcp__plugin_github_github__get_file_contents",
+      "WebFetch(domain:www.insta360.com)",
+      "WebFetch(domain:www.espboards.dev)",
+      "WebFetch(domain:creatorsgarten-insta360-link-controller.pages.dev)"
+    ]
+  },
+  "outputStyle": "default"
+}
