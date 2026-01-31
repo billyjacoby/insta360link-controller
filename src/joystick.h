@@ -1,0 +1,41 @@
+#ifndef JOYSTICK_H
+#define JOYSTICK_H
+
+#include <Arduino.h>
+
+struct JoystickReading {
+    float x;  // -1.0 to 1.0
+    float y;  // -1.0 to 1.0
+};
+
+struct PanTiltCommand {
+    int8_t panDirection;   // 1=right, -1=left, 0=stop
+    uint8_t panSpeed;      // 0-30
+    int8_t tiltDirection;  // 1=up, -1=down, 0=stop
+    uint8_t tiltSpeed;     // 0-20
+};
+
+class Joystick {
+public:
+    void begin(uint8_t xPin, uint8_t yPin);
+    JoystickReading read();
+    PanTiltCommand toPanTilt(const JoystickReading& reading);
+
+    void setDeadzone(float deadzone) { _deadzone = deadzone; }
+    void setInvertX(bool invert) { _invertX = invert; }
+    void setInvertY(bool invert) { _invertY = invert; }
+
+private:
+    uint8_t _xPin;
+    uint8_t _yPin;
+    float _deadzone = 0.1f;
+    bool _invertX = false;
+    bool _invertY = false;
+
+    float normalizeAxis(int rawValue);
+    float applyDeadzone(float value);
+};
+
+extern Joystick joystick;
+
+#endif
