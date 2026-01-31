@@ -19,8 +19,8 @@ JoystickReading Joystick::read() {
     int rawX = analogRead(_xPin);
     int rawY = analogRead(_yPin);
 
-    float x = normalizeAxis(rawX);
-    float y = normalizeAxis(rawY);
+    float x = normalizeAxis(rawX, _centerX);
+    float y = normalizeAxis(rawY, _centerY);
 
     x = applyDeadzone(x);
     y = applyDeadzone(y);
@@ -31,9 +31,16 @@ JoystickReading Joystick::read() {
     return { x, y };
 }
 
-float Joystick::normalizeAxis(int rawValue) {
-    // Convert 0-4095 to -1.0 to 1.0
-    float normalized = (rawValue - JOYSTICK_CENTER) / (float)(JOYSTICK_CENTER);
+float Joystick::normalizeAxis(int rawValue, int center) {
+    // Convert 0-4095 to -1.0 to 1.0 using calibrated center
+    float normalized;
+    if (rawValue < center) {
+        // Below center: map [0, center] to [-1, 0]
+        normalized = (rawValue - center) / (float)center;
+    } else {
+        // Above center: map [center, 4095] to [0, 1]
+        normalized = (rawValue - center) / (float)(JOYSTICK_MAX - center);
+    }
     return constrain(normalized, -1.0f, 1.0f);
 }
 

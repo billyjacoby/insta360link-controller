@@ -24,6 +24,8 @@ public:
     void setDeadzone(float deadzone) { _deadzone = deadzone; }
     void setInvertX(bool invert) { _invertX = invert; }
     void setInvertY(bool invert) { _invertY = invert; }
+    void setCenterX(int center) { _centerX = center; }
+    void setCenterY(int center) { _centerY = center; }
 
 private:
     uint8_t _xPin;
@@ -31,8 +33,10 @@ private:
     float _deadzone = 0.1f;
     bool _invertX = false;
     bool _invertY = false;
+    int _centerX = 2048;
+    int _centerY = 2048;
 
-    float normalizeAxis(int rawValue);
+    float normalizeAxis(int rawValue, int center);
     float applyDeadzone(float value);
 };
 

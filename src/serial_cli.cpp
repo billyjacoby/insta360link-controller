@@ -2,6 +2,7 @@
 #include "config.h"
 #include "wifi_manager.h"
 #include "websocket_client.h"
+#include "joystick.h"
 
 SerialCLI serialCli;
 
@@ -21,6 +22,10 @@ void SerialCLI::loadConfig() {
     _wsHost = _prefs.getString(NVS_KEY_WS_HOST, "");
     _wsPort = _prefs.getUShort(NVS_KEY_WS_PORT, 0);
     _wsToken = _prefs.getString(NVS_KEY_WS_TOKEN, "");
+    _invertX = _prefs.getBool(NVS_KEY_INVERT_X, false);
+    _invertY = _prefs.getBool(NVS_KEY_INVERT_Y, false);
+    _joyCenterX = _prefs.getInt(NVS_KEY_JOY_CENTER_X, 2048);
+    _joyCenterY = _prefs.getInt(NVS_KEY_JOY_CENTER_Y, 2048);
     _prefs.end();
 }
 
@@ -31,8 +36,25 @@ void SerialCLI::saveConfig() {
     _prefs.putString(NVS_KEY_WS_HOST, _wsHost);
     _prefs.putUShort(NVS_KEY_WS_PORT, _wsPort);
     _prefs.putString(NVS_KEY_WS_TOKEN, _wsToken);
+    _prefs.putBool(NVS_KEY_INVERT_X, _invertX);
+    _prefs.putBool(NVS_KEY_INVERT_Y, _invertY);
+    _prefs.putInt(NVS_KEY_JOY_CENTER_X, _joyCenterX);
+    _prefs.putInt(NVS_KEY_JOY_CENTER_Y, _joyCenterY);
     _prefs.end();
     Serial.println("Config saved");
+}
+
+void SerialCLI::setWifiConfig(const String& ssid, const String& password) {
+    _wifiSsid = ssid;
+    _wifiPassword = password;
+    saveConfig();
+}
+
+void SerialCLI::setServerConfig(const String& host, uint16_t port, const String& token) {
+    _wsHost = host;
+    _wsPort = port;
+    _wsToken = token;
+    saveConfig();
 }
 
 void SerialCLI::update() {
@@ -51,6 +73,62 @@ void SerialCLI::update() {
             _inputBuffer += c;
         }
     }
+}
+
+void SerialCLI::parseQrUrl(const String& url) {
+    // Parse URL like: insta360link://connect?port=XXXXX&token=XXXXX
+    int portIdx = url.indexOf("port=");
+    int tokenIdx = url.indexOf("token=");
+
+    if (portIdx >= 0) {
+        int portEnd = url.indexOf('&', portIdx);
+        String portStr = (portEnd >= 0)
+            ? url.substring(portIdx + 5, portEnd)
+            : url.substring(portIdx + 5);
+        _wsPort = portStr.toInt();
+        Serial.print("Port: ");
+        Serial.println(_wsPort);
+    }
+
+    if (tokenIdx >= 0) {
+        int tokenEnd = url.indexOf('&', tokenIdx);
+        _wsToken = (tokenEnd >= 0)
+            ? url.substring(tokenIdx + 6, tokenEnd)
+            : url.substring(tokenIdx + 6);
+        Serial.println("Token: (set)");
+    }
+
+    if (portIdx >= 0 || tokenIdx >= 0) {
+        saveConfig();
+    } else {
+        Serial.println("Could not parse URL. Expected format: insta360link://connect?port=XXXXX&token=XXXXX");
+    }
+}
+
+void SerialCLI::calibrateJoystick() {
+    Serial.println("Joystick calibration");
+    Serial.println("Release the joystick and keep it centered...");
+    delay(2000);
+
+    // Read multiple samples and average
+    long sumX = 0, sumY = 0;
+    const int samples = 50;
+    for (int i = 0; i < samples; i++) {
+        sumX += analogRead(JOYSTICK_X_PIN);
+        sumY += analogRead(JOYSTICK_Y_PIN);
+        delay(20);
+    }
+
+    _joyCenterX = sumX / samples;
+    _joyCenterY = sumY / samples;
+
+    Serial.print("Center X: ");
+    Serial.println(_joyCenterX);
+    Serial.print("Center Y: ");
+    Serial.println(_joyCenterY);
+
+    saveConfig();
+    Serial.println("Calibration complete. Restart to apply.");
 }
 
 void SerialCLI::processCommand(const String& line) {
@@ -95,13 +173,17 @@ void SerialCLI::processCommand(const String& line) {
         Serial.print("WebSocket token set to: ");
         Serial.println(_wsToken);
     }
+    else if (cmd.startsWith("qr ")) {
+        // Parse QR code URL directly
+        parseQrUrl(cmd.substring(3));
+    }
     else if (cmd == "connect") {
         if (!hasWifiConfig()) {
             Serial.println("WiFi not configured. Use: wifi <ssid> <password>");
             return;
         }
         if (!hasServerConfig()) {
-            Serial.println("Server not configured. Use: host, port, token commands");
+            Serial.println("Server not configured. Use: host, port, token (or qr <url>)");
             return;
         }
         wifiManager.connect(_wifiSsid, _wifiPassword);
@@ -110,6 +192,38 @@ void SerialCLI::processCommand(const String& line) {
         insta360Client.disconnect();
         wifiManager.disconnect();
         Serial.println("Disconnected");
+    }
+    else if (cmd == "portal") {
+        _portalRequested = true;
+        Serial.println("Starting captive portal...");
+    }
+    else if (cmd == "invertx") {
+        _invertX = !_invertX;
+        joystick.setInvertX(_invertX);
+        saveConfig();
+        Serial.print("Invert X: ");
+        Serial.println(_invertX ? "ON" : "OFF");
+    }
+    else if (cmd == "inverty") {
+        _invertY = !_invertY;
+        joystick.setInvertY(_invertY);
+        saveConfig();
+        Serial.print("Invert Y: ");
+        Serial.println(_invertY ? "ON" : "OFF");
+    }
+    else if (cmd == "calibrate") {
+        calibrateJoystick();
+    }
+    else if (cmd == "joy") {
+        // Show live joystick values for 5 seconds
+        Serial.println("Joystick test (5 seconds):");
+        unsigned long start = millis();
+        while (millis() - start < 5000) {
+            JoystickReading reading = joystick.read();
+            Serial.printf("X: %6.2f  Y: %6.2f\r", reading.x, reading.y);
+            delay(100);
+        }
+        Serial.println("\nDone");
     }
     else if (cmd == "clear") {
         _prefs.begin(NVS_NAMESPACE, false);
@@ -120,6 +234,10 @@ void SerialCLI::processCommand(const String& line) {
         _wsHost = "";
         _wsPort = 0;
         _wsToken = "";
+        _invertX = false;
+        _invertY = false;
+        _joyCenterX = 2048;
+        _joyCenterY = 2048;
         Serial.println("Config cleared");
     }
     else if (cmd == "reboot") {
@@ -136,15 +254,27 @@ void SerialCLI::processCommand(const String& line) {
 
 void SerialCLI::printHelp() {
     Serial.println();
-    Serial.println("Commands:");
+    Serial.println("=== Configuration ===");
     Serial.println("  wifi <ssid> [password]  - Set WiFi credentials");
-    Serial.println("  host <ip>               - Set WebSocket server IP");
-    Serial.println("  port <port>             - Set WebSocket server port");
-    Serial.println("  token <token>           - Set WebSocket auth token");
-    Serial.println("  connect                 - Connect to WiFi and server");
+    Serial.println("  host <ip>               - Set Mac IP address");
+    Serial.println("  port <port>             - Set WebSocket port");
+    Serial.println("  token <token>           - Set auth token");
+    Serial.println("  qr <url>                - Parse QR code URL (extracts port & token)");
+    Serial.println("  portal                  - Start WiFi config portal");
+    Serial.println();
+    Serial.println("=== Connection ===");
+    Serial.println("  connect                 - Connect to WiFi and camera");
     Serial.println("  disconnect              - Disconnect from server");
     Serial.println("  status                  - Show current status");
-    Serial.println("  clear                   - Clear saved config");
+    Serial.println();
+    Serial.println("=== Joystick ===");
+    Serial.println("  joy                     - Test joystick (5 sec)");
+    Serial.println("  calibrate               - Calibrate joystick center");
+    Serial.println("  invertx                 - Toggle X-axis inversion");
+    Serial.println("  inverty                 - Toggle Y-axis inversion");
+    Serial.println();
+    Serial.println("=== System ===");
+    Serial.println("  clear                   - Clear all saved config");
     Serial.println("  reboot                  - Restart ESP32");
     Serial.println("  help                    - Show this help");
     Serial.println();
@@ -190,6 +320,17 @@ void SerialCLI::printStatus() {
             Serial.println(")");
             break;
     }
+
+    Serial.print("Joystick: ");
+    Serial.print("InvertX=");
+    Serial.print(_invertX ? "ON" : "OFF");
+    Serial.print(" InvertY=");
+    Serial.print(_invertY ? "ON" : "OFF");
+    Serial.print(" Center=(");
+    Serial.print(_joyCenterX);
+    Serial.print(",");
+    Serial.print(_joyCenterY);
+    Serial.println(")");
 
     Serial.println("--------------");
 }

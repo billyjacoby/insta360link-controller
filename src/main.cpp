@@ -4,14 +4,23 @@
 #include "wifi_manager.h"
 #include "websocket_client.h"
 #include "serial_cli.h"
+#include "status_led.h"
+#include "captive_portal.h"
 
 // Timing
 unsigned long lastJoystickRead = 0;
 bool wasWifiConnected = false;
+bool portalMode = false;
+
+void updateStatusLed();
 
 void setup() {
     Serial.begin(SERIAL_BAUD);
     delay(1000);  // Give serial time to initialize
+
+    // Initialize status LED first for early feedback
+    statusLed.begin(STATUS_LED_PIN);
+    statusLed.setPattern(LedPattern::BLINK_SLOW);
 
     // Initialize modules
     joystick.begin(JOYSTICK_X_PIN, JOYSTICK_Y_PIN);
@@ -21,18 +30,79 @@ void setup() {
     insta360Client.begin();
     serialCli.begin();
 
-    // Auto-connect if config exists
+    // Apply saved joystick settings
+    joystick.setInvertX(serialCli.getInvertX());
+    joystick.setInvertY(serialCli.getInvertY());
+    joystick.setCenterX(serialCli.getJoyCenterX());
+    joystick.setCenterY(serialCli.getJoyCenterY());
+
+    // Auto-connect if config exists, otherwise start portal
     if (serialCli.hasWifiConfig()) {
         Serial.println("[Main] Auto-connecting to WiFi...");
         wifiManager.connect(serialCli.getWifiSsid(), serialCli.getWifiPassword());
+    } else {
+        Serial.println("[Main] No WiFi configured, starting portal...");
+        captivePortal.begin();
+        portalMode = true;
     }
 }
 
 void loop() {
+    // Update status LED
+    statusLed.update();
+
+    // Handle captive portal mode
+    if (portalMode || captivePortal.isActive()) {
+        captivePortal.update();
+        serialCli.update();  // Still allow serial commands
+
+        // Check if portal finished configuration
+        if (captivePortal.isConfigured()) {
+            serialCli.setWifiConfig(
+                captivePortal.getWifiSsid(),
+                captivePortal.getWifiPassword()
+            );
+            serialCli.setServerConfig(
+                captivePortal.getWsHost(),
+                captivePortal.getWsPort(),
+                captivePortal.getWsToken()
+            );
+            Serial.println("[Main] Portal config saved, rebooting...");
+            delay(500);
+            ESP.restart();
+        }
+
+        // Check for portal request from serial
+        if (serialCli.portalRequested()) {
+            serialCli.clearPortalRequest();
+            if (!captivePortal.isActive()) {
+                wifiManager.disconnect();
+                captivePortal.begin();
+            }
+            portalMode = true;
+        }
+
+        statusLed.setPattern(LedPattern::BLINK_DOUBLE);
+        return;  // Skip normal loop when in portal mode
+    }
+
+    // Check for portal request from serial
+    if (serialCli.portalRequested()) {
+        serialCli.clearPortalRequest();
+        wifiManager.disconnect();
+        insta360Client.disconnect();
+        captivePortal.begin();
+        portalMode = true;
+        return;
+    }
+
     // Update all modules
     serialCli.update();
     wifiManager.update();
     insta360Client.update();
+
+    // Update LED based on connection state
+    updateStatusLed();
 
     // Auto-connect to WebSocket when WiFi connects
     if (wifiManager.isConnected() && !wasWifiConnected) {
@@ -60,13 +130,20 @@ void loop() {
         if (insta360Client.isConnected()) {
             insta360Client.sendPanTilt(cmd);
         }
+    }
+}
 
-        // Debug output (uncomment to see joystick values)
-        // if (reading.x != 0 || reading.y != 0) {
-        //     Serial.printf("Joy: %.2f, %.2f -> Pan: %d/%d, Tilt: %d/%d\n",
-        //         reading.x, reading.y,
-        //         cmd.panDirection, cmd.panSpeed,
-        //         cmd.tiltDirection, cmd.tiltSpeed);
-        // }
+void updateStatusLed() {
+    if (insta360Client.isConnected()) {
+        statusLed.setPattern(LedPattern::SOLID);
+    } else if (insta360Client.getState() == WSState::CONNECTING ||
+               insta360Client.getState() == WSState::CONNECTED) {
+        statusLed.setPattern(LedPattern::BLINK_FAST);
+    } else if (wifiManager.getState() == WiFiState::CONNECTING) {
+        statusLed.setPattern(LedPattern::BLINK_SLOW);
+    } else if (wifiManager.isConnected()) {
+        statusLed.setPattern(LedPattern::BLINK_FAST);
+    } else {
+        statusLed.setPattern(LedPattern::OFF);
     }
 }
