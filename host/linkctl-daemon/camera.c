@@ -1,81 +1,153 @@
 #include "camera.h"
-#include <libuvc/libuvc.h>
+
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
+#include <IOKit/IOCFPlugIn.h>
+#include <IOKit/usb/IOUSBLib.h>
+
 #include <stdio.h>
 #include <string.h>
 
-static uvc_context_t *ctx = NULL;
-static uvc_device_t *dev = NULL;
-static uvc_device_handle_t *devh = NULL;
+// UVC request codes
+#define UVC_SET_CUR 0x01
+#define UVC_GET_CUR 0x81
 
-int camera_init(void) {
-    uvc_error_t res = uvc_init(&ctx, NULL);
-    if (res < 0) {
-        fprintf(stderr, "[camera] uvc_init failed: %s\n", uvc_strerror(res));
+static IOUSBDeviceInterface **device = NULL;
+
+// --- IOKit USB helpers ---
+
+static int uvc_set_cur(uint8_t unit, uint8_t selector,
+                        void *data, uint16_t length) {
+    if (!device) return -1;
+
+    IOUSBDevRequest req;
+    req.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
+    req.bRequest = UVC_SET_CUR;
+    req.wValue = (selector << 8);
+    req.wIndex = (unit << 8);  // unit ID in high byte, interface 0 in low byte
+    req.wLength = length;
+    req.wLenDone = 0;
+    req.pData = data;
+
+    IOReturn kr = (*device)->DeviceRequest(device, &req);
+    if (kr != kIOReturnSuccess) {
+        fprintf(stderr, "[camera] SET_CUR failed (unit=0x%02x sel=0x%02x): 0x%08x\n",
+                unit, selector, kr);
         return -1;
     }
-    printf("[camera] libuvc initialized\n");
+    return 0;
+}
+
+static int uvc_get_cur(uint8_t unit, uint8_t selector,
+                        void *data, uint16_t length) {
+    if (!device) return -1;
+
+    IOUSBDevRequest req;
+    req.bmRequestType = USBmakebmRequestType(kUSBIn, kUSBClass, kUSBInterface);
+    req.bRequest = UVC_GET_CUR;
+    req.wValue = (selector << 8);
+    req.wIndex = (unit << 8);
+    req.wLength = length;
+    req.wLenDone = 0;
+    req.pData = data;
+
+    IOReturn kr = (*device)->DeviceRequest(device, &req);
+    if (kr != kIOReturnSuccess) {
+        fprintf(stderr, "[camera] GET_CUR failed (unit=0x%02x sel=0x%02x): 0x%08x\n",
+                unit, selector, kr);
+        return -1;
+    }
+    return (int)req.wLenDone;
+}
+
+// --- Public API ---
+
+int camera_init(void) {
+    // No global init needed for IOKit
     return 0;
 }
 
 int camera_open(void) {
-    if (!ctx) return -1;
-    if (devh) return 0;  // Already open
+    if (device) return 0;  // Already open
 
-    uvc_error_t res = uvc_find_device(ctx, &dev, INSTA360_VID, INSTA360_PID, NULL);
-    if (res < 0) {
-        return -1;  // Not found — caller can retry
-    }
-
-    res = uvc_open(dev, &devh);
-    if (res < 0) {
-        fprintf(stderr, "[camera] uvc_open failed: %s\n", uvc_strerror(res));
-        uvc_unref_device(dev);
-        dev = NULL;
+    // Match by VID/PID
+    CFMutableDictionaryRef matchDict = IOServiceMatching(kIOUSBDeviceClassName);
+    if (!matchDict) {
+        fprintf(stderr, "[camera] IOServiceMatching failed\n");
         return -1;
     }
 
-    printf("[camera] Insta360 Link opened\n");
+    UInt16 vid = INSTA360_VID;
+    UInt16 pid = INSTA360_PID;
+    CFNumberRef vidRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt16Type, &vid);
+    CFNumberRef pidRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt16Type, &pid);
+    CFDictionarySetValue(matchDict, CFSTR(kUSBVendorID), vidRef);
+    CFDictionarySetValue(matchDict, CFSTR(kUSBProductID), pidRef);
+    CFRelease(vidRef);
+    CFRelease(pidRef);
+
+    // IOServiceGetMatchingService consumes matchDict
+    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault, matchDict);
+    if (!service) {
+        return -1;  // Not found — caller can retry
+    }
+
+    // Get plugin interface
+    IOCFPlugInInterface **plugIn = NULL;
+    SInt32 score;
+    kern_return_t kr = IOCreatePlugInInterfaceForService(
+        service, kIOUSBDeviceUserClientTypeID, kIOCFPlugInInterfaceID,
+        &plugIn, &score);
+    IOObjectRelease(service);
+
+    if (kr != kIOReturnSuccess || !plugIn) {
+        fprintf(stderr, "[camera] IOCreatePlugInInterface failed: 0x%08x\n", kr);
+        return -1;
+    }
+
+    // Query for device interface
+    HRESULT res = (*plugIn)->QueryInterface(plugIn,
+        CFUUIDGetUUIDBytes(kIOUSBDeviceInterfaceID),
+        (LPVOID *)&device);
+    (*plugIn)->Release(plugIn);
+
+    if (res || !device) {
+        fprintf(stderr, "[camera] QueryInterface failed: 0x%08x\n", (int)res);
+        device = NULL;
+        return -1;
+    }
+
+    // NOTE: We intentionally do NOT call USBDeviceOpen().
+    // DeviceRequest() works without it for class-specific requests,
+    // allowing us to coexist with the Apple UVC kernel driver.
+
+    printf("[camera] Insta360 Link found via IOKit\n");
     return 0;
 }
 
 void camera_close(void) {
-    if (devh) {
-        uvc_close(devh);
-        devh = NULL;
+    if (device) {
+        (*device)->Release(device);
+        device = NULL;
     }
-    if (dev) {
-        uvc_unref_device(dev);
-        dev = NULL;
-    }
-    printf("[camera] Camera closed\n");
 }
 
 void camera_destroy(void) {
     camera_close();
-    if (ctx) {
-        uvc_exit(ctx);
-        ctx = NULL;
-    }
 }
 
 bool camera_is_connected(void) {
-    return devh != NULL;
+    return device != NULL;
 }
 
 int camera_pan_tilt(uint8_t pan_dir, uint8_t pan_speed,
                     uint8_t tilt_dir, uint8_t tilt_speed) {
-    if (!devh) return -1;
-
     uint8_t data[4] = { pan_dir, pan_speed, tilt_dir, tilt_speed };
-
-    uvc_error_t res = uvc_set_ctrl(devh, XU_UNIT_ID, SEL_PAN_TILT_RELATIVE,
-                                    data, sizeof(data));
-    if (res < 0) {
-        fprintf(stderr, "[camera] pan_tilt failed: %s\n", uvc_strerror(res));
+    int rc = uvc_set_cur(XU_UNIT_ID, SEL_PAN_TILT_RELATIVE, data, sizeof(data));
+    if (rc != 0) {
         camera_close();
-        return -1;
     }
-    return 0;
+    return rc;
 }
 
 int camera_stop(void) {
@@ -83,49 +155,29 @@ int camera_stop(void) {
 }
 
 int camera_center(void) {
-    if (!devh) return -1;
-
     uint8_t data[8] = {0};
-
-    uvc_error_t res = uvc_set_ctrl(devh, XU_UNIT_ID, SEL_GIMBAL_CENTER,
-                                    data, sizeof(data));
-    if (res < 0) {
-        fprintf(stderr, "[camera] center failed: %s\n", uvc_strerror(res));
+    int rc = uvc_set_cur(XU_UNIT_ID, SEL_GIMBAL_CENTER, data, sizeof(data));
+    if (rc != 0) {
         camera_close();
-        return -1;
     }
-    return 0;
+    return rc;
 }
 
 int camera_zoom(uint16_t value) {
-    if (!devh) return -1;
     if (value < ZOOM_MIN || value > ZOOM_MAX) return -1;
 
-    // Zoom is a 2-byte little-endian value on the Camera Terminal unit
     uint8_t data[2] = { (uint8_t)(value & 0xFF), (uint8_t)(value >> 8) };
-
-    uvc_error_t res = uvc_set_ctrl(devh, CT_UNIT_ID, SEL_ZOOM_ABSOLUTE,
-                                    data, sizeof(data));
-    if (res < 0) {
-        fprintf(stderr, "[camera] zoom failed: %s\n", uvc_strerror(res));
+    int rc = uvc_set_cur(CT_UNIT_ID, SEL_ZOOM_ABSOLUTE, data, sizeof(data));
+    if (rc != 0) {
         camera_close();
-        return -1;
     }
-    return 0;
+    return rc;
 }
 
 int camera_get_zoom(void) {
-    if (!devh) return -1;
-
     uint8_t data[2] = {0};
-
-    uvc_error_t res = uvc_get_ctrl(devh, CT_UNIT_ID, SEL_ZOOM_ABSOLUTE,
-                                    data, sizeof(data), UVC_GET_CUR);
-    if (res < 0) {
-        fprintf(stderr, "[camera] get_zoom failed: %s\n", uvc_strerror(res));
-        return -1;
-    }
-
+    int rc = uvc_get_cur(CT_UNIT_ID, SEL_ZOOM_ABSOLUTE, data, sizeof(data));
+    if (rc < 0) return -1;
     return (int)(data[0] | (data[1] << 8));
 }
 

@@ -9,8 +9,11 @@ if(APPLE)
     set(ENV{PKG_CONFIG_PATH} "/opt/homebrew/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
 endif()
 
-# libuvc has cmake config files
-find_package(libuvc REQUIRED)
+# OpenSSL (needed by libwebsockets headers)
+if(APPLE)
+    set(OPENSSL_ROOT_DIR "/opt/homebrew/opt/openssl@3")
+endif()
+find_package(OpenSSL REQUIRED)
 
 # libwebsockets and cjson via pkg-config
 find_package(PkgConfig REQUIRED)
@@ -24,11 +27,10 @@ add_executable(linkctl-daemon
     mdns.c
 )
 
-target_link_libraries(linkctl-daemon LibUVC::UVCShared)
-
 target_include_directories(linkctl-daemon PRIVATE
     ${LWS_INCLUDE_DIRS}
     ${CJSON_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
 )
 
 target_link_directories(linkctl-daemon PRIVATE
@@ -41,9 +43,12 @@ target_link_libraries(linkctl-daemon
     ${CJSON_LIBRARIES}
 )
 
-# macOS: link dns_sd (built-in)
+# macOS: IOKit + CoreFoundation for USB access, dns_sd for mDNS
 if(APPLE)
+    find_library(IOKIT_LIB IOKit REQUIRED)
+    find_library(CF_LIB CoreFoundation REQUIRED)
     find_library(DNSSD_LIB dns_sd)
+    target_link_libraries(linkctl-daemon ${IOKIT_LIB} ${CF_LIB})
     if(DNSSD_LIB)
         target_link_libraries(linkctl-daemon ${DNSSD_LIB})
     endif()

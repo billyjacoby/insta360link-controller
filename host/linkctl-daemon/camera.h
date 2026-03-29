@@ -35,16 +35,16 @@ typedef struct {
     uint16_t zoom;  // Current zoom level (100-400)
 } camera_status_t;
 
-// Initialize the libuvc context. Returns 0 on success.
+// Initialize the camera subsystem. Returns 0 on success.
 int camera_init(void);
 
-// Attempt to find and open the Insta360 Link. Returns 0 on success.
+// Attempt to find the Insta360 Link via IOKit. Returns 0 on success.
 int camera_open(void);
 
-// Close the camera handle (if open).
+// Release the IOKit device handle.
 void camera_close(void);
 
-// Shut down libuvc context.
+// Shut down the camera subsystem.
 void camera_destroy(void);
 
 // Returns true if the camera handle is currently open.
