@@ -22,7 +22,6 @@ public:
     String getWifiPassword() const { return _wifiPassword; }
     String getWsHost() const { return _wsHost; }
     uint16_t getWsPort() const { return _wsPort; }
-    String getWsToken() const { return _wsToken; }
 
 private:
     WebServer _server{80};
@@ -36,7 +35,6 @@ private:
     String _wifiPassword;
     String _wsHost;
     uint16_t _wsPort = 0;
-    String _wsToken;
 
     void setupRoutes();
     void handleRoot();

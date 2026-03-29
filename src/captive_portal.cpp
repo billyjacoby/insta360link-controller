@@ -99,38 +99,8 @@ void CaptivePortal::handleRoot() {
 void CaptivePortal::handleSave() {
     _wifiSsid = urlDecode(_server.arg("ssid"));
     _wifiPassword = urlDecode(_server.arg("pass"));
-
-    // Parse QR URL or individual fields
-    String qrUrl = urlDecode(_server.arg("qrurl"));
-    if (qrUrl.length() > 0) {
-        // Parse URL like: insta360link://connect?port=XXXXX&token=XXXXX
-        int portIdx = qrUrl.indexOf("port=");
-        int tokenIdx = qrUrl.indexOf("token=");
-
-        if (portIdx >= 0) {
-            int portEnd = qrUrl.indexOf('&', portIdx);
-            String portStr = (portEnd >= 0)
-                ? qrUrl.substring(portIdx + 5, portEnd)
-                : qrUrl.substring(portIdx + 5);
-            _wsPort = portStr.toInt();
-        }
-
-        if (tokenIdx >= 0) {
-            int tokenEnd = qrUrl.indexOf('&', tokenIdx);
-            _wsToken = (tokenEnd >= 0)
-                ? qrUrl.substring(tokenIdx + 6, tokenEnd)
-                : qrUrl.substring(tokenIdx + 6);
-        }
-    } else {
-        // Use individual fields
-        _wsPort = _server.arg("port").toInt();
-        _wsToken = urlDecode(_server.arg("token"));
-    }
-
     _wsHost = urlDecode(_server.arg("host"));
-    if (_wsHost.length() == 0) {
-        _wsHost = "192.168.1.1";  // Default, user should set this
-    }
+    _wsPort = _server.arg("port").toInt();
 
     _configured = true;
 
@@ -140,7 +110,12 @@ void CaptivePortal::handleSave() {
     response += "<title>Saved</title></head><body>";
     response += "<h2 style='color:#0f9d58'>Configuration Saved!</h2>";
     response += "<p>WiFi: " + _wifiSsid + "</p>";
-    response += "<p>Server: " + _wsHost + ":" + String(_wsPort) + "</p>";
+
+    if (_wsHost.length() > 0 && _wsPort > 0) {
+        response += "<p>Daemon: " + _wsHost + ":" + String(_wsPort) + "</p>";
+    } else {
+        response += "<p>Daemon: auto-discover via mDNS</p>";
+    }
 
     if (_networkMode) {
         response += "<p>Settings saved. Use 'reboot' command to apply.</p>";
@@ -215,7 +190,6 @@ button{background:#0f9d58;color:#fff;padding:12px 20px;border:none;border-radius
 button:hover{background:#0d8a4d}
 .section{background:#16213e;padding:15px;border-radius:8px;margin:15px 0}
 label{font-weight:bold;color:#aaa}
-.or{text-align:center;color:#666;margin:10px 0}
 a{color:#0f9d58}
 .note{background:#2d2d44;padding:10px;border-radius:4px;font-size:13px;color:#aaa;margin-top:15px}
 </style>
@@ -234,27 +208,20 @@ a{color:#0f9d58}
 </div>
 
 <div class='section'>
-<h3>Camera Connection</h3>
-<p style='color:#aaa;font-size:14px'>Get these from the QR code in Insta360 Link app (Settings > LAN Control)</p>
-
-<label>QR Code URL (paste the full URL)</label>
-<input type='text' name='qrurl' placeholder='insta360link://connect?port=...&token=...'>
-
-<div class='or'>- OR enter manually -</div>
+<h3>Daemon Connection (Optional)</h3>
+<p style='color:#aaa;font-size:14px'>Leave blank to auto-discover via mDNS. Only set these if you need a manual override.</p>
 
 <label>Mac IP Address</label>
-<input type='text' name='host' placeholder='192.168.1.100'>
+<input type='text' name='host' placeholder='Auto-discover via mDNS'>
 <label>Port</label>
-<input type='number' name='port' placeholder='From QR code'>
-<label>Token</label>
-<input type='text' name='token' placeholder='From QR code'>
+<input type='number' name='port' placeholder='Default: 9000'>
 </div>
 
 <button type='submit'>Save Configuration</button>
 </form>
 
 <div class='note'>
-<strong>Tip:</strong> After saving, use the 'reboot' command in serial console to apply changes and connect.
+<strong>Note:</strong> The daemon (linkctl-daemon) must be running on your Mac. The controller will auto-discover it via mDNS.
 </div>
 
 <script>

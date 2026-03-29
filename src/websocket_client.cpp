@@ -1,47 +1,38 @@
 #include "websocket_client.h"
-#include "protocol.h"
+#include "commands.h"
 #include "config.h"
+#include <ArduinoJson.h>
+#include <ESPmDNS.h>
 
-Insta360Client insta360Client;
-Insta360Client* Insta360Client::_instance = nullptr;
+LinkCtlClient linkCtlClient;
+LinkCtlClient* LinkCtlClient::_instance = nullptr;
 
-void Insta360Client::wsEventCallback(WStype_t type, uint8_t* payload, size_t length) {
+void LinkCtlClient::wsEventCallback(WStype_t type, uint8_t* payload, size_t length) {
     if (_instance) {
         _instance->onEvent(type, payload, length);
     }
 }
 
-void Insta360Client::begin() {
+void LinkCtlClient::begin() {
     _instance = this;
 }
 
-void Insta360Client::update() {
+void LinkCtlClient::update() {
     _ws.loop();
-
-    // Send heartbeat every second when authenticated
-    if (_state == WSState::AUTHENTICATED) {
-        if (millis() - _lastHeartbeat > HEARTBEAT_INTERVAL_MS) {
-            sendHeartbeat();
-            _lastHeartbeat = millis();
-        }
-    }
 }
 
-bool Insta360Client::connect(const String& host, uint16_t port, const String& token) {
-    if (host.length() == 0 || port == 0 || token.length() == 0) {
-        Serial.println("[WS] Missing host, port, or token");
+bool LinkCtlClient::connect(const String& host, uint16_t port) {
+    if (host.length() == 0 || port == 0) {
+        Serial.println("[WS] Missing host or port");
         return false;
     }
 
     _host = host;
     _port = port;
-    _token = token;
 
-    Serial.printf("[WS] Connecting to ws://%s:%d/?token=%s\n",
-                  _host.c_str(), _port, _token.c_str());
+    Serial.printf("[WS] Connecting to ws://%s:%d\n", _host.c_str(), _port);
 
-    String path = "/?token=" + _token;
-    _ws.begin(_host.c_str(), _port, path.c_str());
+    _ws.begin(_host.c_str(), _port, "/");
     _ws.onEvent(wsEventCallback);
     _ws.setReconnectInterval(WEBSOCKET_RECONNECT_INTERVAL_MS);
 
@@ -49,28 +40,44 @@ bool Insta360Client::connect(const String& host, uint16_t port, const String& to
     return true;
 }
 
-void Insta360Client::disconnect() {
-    _ws.disconnect();
-    _state = WSState::DISCONNECTED;
-    _deviceSerial = "";
+bool LinkCtlClient::connectViaMdns() {
+    Serial.println("[WS] Searching for daemon via mDNS...");
+
+    int n = MDNS.queryService(MDNS_SERVICE_NAME, "tcp");
+    if (n == 0) {
+        Serial.println("[WS] No daemon found via mDNS");
+        return false;
+    }
+
+    String host = MDNS.IP(0).toString();
+    uint16_t port = MDNS.port(0);
+
+    Serial.printf("[WS] Found daemon at %s:%d via mDNS\n", host.c_str(), port);
+    return connect(host, port);
 }
 
-void Insta360Client::onEvent(WStype_t type, uint8_t* payload, size_t length) {
+void LinkCtlClient::disconnect() {
+    _ws.disconnect();
+    _state = WSState::DISCONNECTED;
+    _cameraConnected = false;
+    _cameraZoom = 0;
+}
+
+void LinkCtlClient::onEvent(WStype_t type, uint8_t* payload, size_t length) {
     switch (type) {
         case WStype_DISCONNECTED:
             Serial.println("[WS] Disconnected");
             _state = WSState::DISCONNECTED;
-            _deviceSerial = "";
+            _cameraConnected = false;
             break;
 
         case WStype_CONNECTED:
             Serial.println("[WS] Connected");
             _state = WSState::CONNECTED;
-            sendControlRequest();
             break;
 
-        case WStype_BIN:
-            handleMessage(payload, length);
+        case WStype_TEXT:
+            handleMessage((const char*)payload, length);
             break;
 
         case WStype_ERROR:
@@ -82,117 +89,39 @@ void Insta360Client::onEvent(WStype_t type, uint8_t* payload, size_t length) {
     }
 }
 
-void Insta360Client::handleMessage(uint8_t* payload, size_t length) {
-    // Simple protobuf parsing - look for device serial number
-    // DeviceInfoNotification contains the serial we need
+void LinkCtlClient::handleMessage(const char* json, size_t length) {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, json, length);
+    if (err) {
+        Serial.printf("[WS] JSON parse error: %s\n", err.c_str());
+        return;
+    }
 
-    // For now, do basic parsing to extract device serial
-    // The serial is in field 1 of DeviceInfoNotification (curDeviceSerialNum)
-    // DeviceInfoNotification is in field 10 of Response
+    const char* type = doc["type"];
+    if (!type) return;
 
-    // Look for hasDeviceInfoNotify (field 1) = true
-    // This is a simplified parser - production code should use proper protobuf
-
-    size_t pos = 0;
-    while (pos < length) {
-        if (pos + 1 >= length) break;
-
-        uint8_t tag = payload[pos];
-        uint8_t fieldNum = tag >> 3;
-        uint8_t wireType = tag & 0x07;
-        pos++;
-
-        if (wireType == 0) {  // Varint
-            // Read and discard varint
-            while (pos < length && (payload[pos] & 0x80)) pos++;
-            pos++;
-
-            // If this is hasDeviceInfoNotify (field 1) with value true
-            if (fieldNum == 1) {
-                _state = WSState::AUTHENTICATED;
-                Serial.println("[WS] Authenticated - received device info");
-            }
-        } else if (wireType == 2) {  // Length-delimited
-            // Read length
-            uint32_t len = 0;
-            uint8_t shift = 0;
-            while (pos < length && (payload[pos] & 0x80)) {
-                len |= (payload[pos] & 0x7F) << shift;
-                shift += 7;
-                pos++;
-            }
-            if (pos < length) {
-                len |= payload[pos] << shift;
-                pos++;
-            }
-
-            // If this is deviceInfoNotify (field 10), parse for serial
-            if (fieldNum == 10 && pos + len <= length) {
-                // Look for curDeviceSerialNum (field 1) inside
-                size_t subPos = pos;
-                size_t subEnd = pos + len;
-                while (subPos < subEnd) {
-                    uint8_t subTag = payload[subPos];
-                    uint8_t subFieldNum = subTag >> 3;
-                    uint8_t subWireType = subTag & 0x07;
-                    subPos++;
-
-                    if (subWireType == 2 && subFieldNum == 1) {
-                        // String field - read length
-                        uint32_t strLen = 0;
-                        shift = 0;
-                        while (subPos < subEnd && (payload[subPos] & 0x80)) {
-                            strLen |= (payload[subPos] & 0x7F) << shift;
-                            shift += 7;
-                            subPos++;
-                        }
-                        if (subPos < subEnd) {
-                            strLen |= payload[subPos] << shift;
-                            subPos++;
-                        }
-
-                        if (subPos + strLen <= subEnd && strLen > 0) {
-                            _deviceSerial = String((char*)(payload + subPos), strLen);
-                            Serial.print("[WS] Device serial: ");
-                            Serial.println(_deviceSerial);
-                        }
-                        break;
-                    } else if (subWireType == 0) {
-                        while (subPos < subEnd && (payload[subPos] & 0x80)) subPos++;
-                        subPos++;
-                    } else if (subWireType == 2) {
-                        uint32_t skipLen = 0;
-                        shift = 0;
-                        while (subPos < subEnd && (payload[subPos] & 0x80)) {
-                            skipLen |= (payload[subPos] & 0x7F) << shift;
-                            shift += 7;
-                            subPos++;
-                        }
-                        if (subPos < subEnd) {
-                            skipLen |= payload[subPos] << shift;
-                            subPos++;
-                        }
-                        subPos += skipLen;
-                    }
-                }
-            }
-            pos += len;
+    if (strcmp(type, "status") == 0) {
+        bool newConnected = doc["camera_connected"] | false;
+        uint16_t newZoom = doc["zoom"] | 0;
+        if (newConnected != _cameraConnected || newZoom != _cameraZoom) {
+            Serial.printf("[WS] Status: camera=%s zoom=%d\n",
+                          newConnected ? "connected" : "disconnected",
+                          newZoom);
         }
+        _cameraConnected = newConnected;
+        _cameraZoom = newZoom;
+    } else if (strcmp(type, "error") == 0) {
+        const char* msg = doc["message"] | "unknown error";
+        Serial.printf("[WS] Error: %s\n", msg);
     }
 }
 
-void Insta360Client::sendControlRequest() {
-    auto msg = ProtocolEncoder::encodeControlRequest(_token);
-    _ws.sendBIN(msg.data(), msg.size());
-    Serial.println("[WS] Sent control request");
+void LinkCtlClient::sendText(const String& msg) {
+    if (_state != WSState::CONNECTED) return;
+    _ws.sendTXT(msg.c_str(), msg.length());
 }
 
-void Insta360Client::sendHeartbeat() {
-    auto msg = ProtocolEncoder::encodeHeartbeatRequest();
-    _ws.sendBIN(msg.data(), msg.size());
-}
-
-void Insta360Client::sendPanTilt(const PanTiltCommand& cmd) {
+void LinkCtlClient::sendPanTilt(const PanTiltCommand& cmd) {
     // Only send if command changed
     if (cmd.panDirection == _lastCmd.panDirection &&
         cmd.panSpeed == _lastCmd.panSpeed &&
@@ -202,23 +131,28 @@ void Insta360Client::sendPanTilt(const PanTiltCommand& cmd) {
     }
     _lastCmd = cmd;
 
-    if (_state != WSState::AUTHENTICATED || _deviceSerial.length() == 0) {
-        return;
-    }
+    if (_state != WSState::CONNECTED) return;
 
-    auto msg = ProtocolEncoder::encodePanTiltRequest(
-        _deviceSerial,
-        cmd.panDirection, cmd.panSpeed,
-        cmd.tiltDirection, cmd.tiltSpeed
-    );
-    _ws.sendBIN(msg.data(), msg.size());
+    sendText(cmdPanTilt(cmd.panDirection, cmd.panSpeed,
+                        cmd.tiltDirection, cmd.tiltSpeed));
 }
 
-void Insta360Client::sendZoom(uint32_t zoomValue) {
-    if (_state != WSState::AUTHENTICATED || _deviceSerial.length() == 0) {
-        return;
-    }
+void LinkCtlClient::sendZoom(uint16_t zoomValue) {
+    if (_state != WSState::CONNECTED) return;
+    sendText(cmdZoom(zoomValue));
+}
 
-    auto msg = ProtocolEncoder::encodeZoomRequest(_deviceSerial, zoomValue);
-    _ws.sendBIN(msg.data(), msg.size());
+void LinkCtlClient::sendStop() {
+    if (_state != WSState::CONNECTED) return;
+    sendText(cmdStop());
+}
+
+void LinkCtlClient::sendCenter() {
+    if (_state != WSState::CONNECTED) return;
+    sendText(cmdCenter());
+}
+
+void LinkCtlClient::requestStatus() {
+    if (_state != WSState::CONNECTED) return;
+    sendText(cmdStatus());
 }

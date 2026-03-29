@@ -4,128 +4,133 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ESP32-based joystick controller for Insta360 Link webcam. Controls pan/tilt axes via joystick input, with zoom control TBD. Supports two operation modes:
-- **Tethered**: Camera connected to macOS host - ESP32 connects via WiFi to WebSocket server on Mac
-- **Wireless**: TBD - may require direct camera communication or alternative approach
+ESP32-based joystick controller for Insta360 Link webcam. Controls pan/tilt/zoom via joystick input over WiFi. The camera is controlled directly via USB/UVC extension units through a lightweight Mac daemon — no Insta360 desktop app required, no auth tokens needed.
+
+## Architecture
+
+```
+[Insta360 Link] --USB/UVC--> [linkctl-daemon (C, libuvc)] --WiFi/WebSocket--> [ESP32 + Joystick]
+                               mDNS: _insta360ctrl._tcp
+                               Binds all interfaces
+                               No auth required
+```
+
+- **linkctl-daemon**: Mac-side C program that controls the camera directly via UVC extension units
+- **ESP32 firmware**: Reads joystick, discovers daemon via mDNS, sends JSON commands over WebSocket
 
 ## Hardware
 
 - **Controller**: ESP32 development board
 - **Input**: Analog joystick (2-axis for pan/tilt)
-- **Target**: Insta360 Link webcam (PTZ USB webcam with UVC extensions)
+- **Target**: Insta360 Link webcam (VID: 0x2e1a, PID: 0x4c01)
 
 **Important**: Use ADC1 pins (GPIO32-39) for joystick when WiFi is active. ADC2 pins conflict with WiFi.
 
 ## Toolchain
 
 - **IDE**: VSCode with PlatformIO extension
-- **Framework**: Arduino
-- **Build system**: PlatformIO (`platformio.ini` configuration)
+- **Framework**: Arduino (ESP32), CMake (Mac daemon)
+- **Build system**: PlatformIO for ESP32, CMake for daemon
 
 ## Build Commands
+
+### ESP32 Firmware
 
 ```bash
 pio run                              # Build firmware
 pio run --target upload              # Upload to ESP32
 pio device monitor                   # Monitor serial output
 pio run --target upload && pio device monitor  # Build, upload, monitor
-pio run --target clean               # Clean build artifacts
 ```
 
-## Insta360 Link Control Protocol
+### Mac Daemon
 
-Reference implementation: https://github.com/creatorsgarten/insta360-link-controller
+```bash
+# Install dependencies
+brew install libwebsockets cjson openssl@3
 
-### Architecture
+# Build
+cd host/linkctl-daemon
+mkdir -p build && cd build
+PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" cmake ..
+make
 
-```
-[Insta360 Link] --USB--> [Mac + Insta360 Link App] --WebSocket--> [ESP32 Controller]
-                              localhost:PORT
-```
-
-The Insta360 Link desktop app exposes a WebSocket server on localhost. Connection requires port and token from QR code displayed in the app.
-
-### WebSocket Connection
-
-- URL: `ws://HOST:PORT/?token=TOKEN`
-- Port/token obtained from QR code in Insta360 Link desktop app
-- Binary messages using Protocol Buffers
-
-### Message Types (Protobuf)
-
-**Sending (Request)**:
-- `ControlRequest` - Required on connect with token
-- `HeartbeatRequest` - Send every 1 second
-- `UVCRequest` - Simple camera params (zoom)
-- `UVCExtendRequest` - Extended params (pan/tilt)
-
-**Receiving (Response)**:
-- `DeviceInfoNotification` - Device list and current state
-- `ConnectionNotification` - Connection status
-- `HeartbeatResponse` - Heartbeat acknowledgment
-
-### Pan/Tilt Control
-
-```cpp
-// UVCExtendRequest for pan/tilt
-paramType: PARAM_PAN_TILT_RELATIVE (12)
-selector: XU_PANTILT_RELATIVE_CONTROL (22)
-data: [pan_dir, pan_speed, tilt_dir, tilt_speed]
-
-// Direction byte: 1 = positive, 255 = negative, 0 = stop
-// Speed: 0-30 for pan, 0-20 for tilt
+# Run
+./linkctl-daemon              # Start daemon (port 9000, mDNS enabled)
+./linkctl-daemon --test       # Test camera control and exit
+./linkctl-daemon --port 8080  # Custom port
+./linkctl-daemon --no-mdns    # Disable mDNS advertisement
 ```
 
-### Zoom Control
+## Protocol
 
-```cpp
-// UVCRequest for zoom
-paramType: PARAM_ZOOM (1)
-value: 100-400  // 100 = 1x, 400 = 4x
+JSON over WebSocket (text frames). ESP32 sends commands, daemon responds with status.
+
+### Commands (ESP32 → Daemon)
+
+```json
+{"cmd": "pan_tilt", "pan_dir": 1, "pan_speed": 15, "tilt_dir": 255, "tilt_speed": 10}
+{"cmd": "zoom", "value": 250}
+{"cmd": "stop"}
+{"cmd": "center"}
+{"cmd": "status"}
 ```
 
-## Implementation Plan
+### Responses (Daemon → ESP32)
 
-### Phase 1: Basic Joystick + WiFi
+```json
+{"type": "status", "camera_connected": true, "zoom": 150}
+{"type": "error", "message": "camera not found"}
+```
 
-1. **PlatformIO project setup** with ESP32 + Arduino framework
-2. **Joystick module**: Read 2-axis analog input, apply deadzone and calibration
-3. **WiFi module**: Connect to configured network
-4. **WebSocket client**: Connect to Mac, handle binary protobuf messages
-5. **Protobuf encoding**: Manually encode Request messages (avoid full protobuf library overhead)
-6. **Main loop**: Read joystick → map to pan/tilt speed → send WebSocket command
+### Direction encoding: 1 = positive, 255 = negative, 0 = stop
+### Speed ranges: pan 0-30, tilt 0-20. Zoom 100-400.
 
-### Phase 2: Configuration
+## UVC Control Mapping
 
-1. **WiFi credentials**: Store in EEPROM/NVS or use WiFiManager captive portal
-2. **Server config**: Store WebSocket host, port, token
-3. **Serial CLI**: Configure via USB serial for development
-
-### Phase 3: Enhancements
-
-1. **Zoom control**: Add buttons or second axis for zoom
-2. **Preset positions**: Trigger saved camera positions
-3. **LED feedback**: Connection status indication
-4. **BLE config**: Configure WiFi/server via phone app (optional)
+| Command | Unit | Selector | Data |
+|---------|------|----------|------|
+| pan_tilt | 0x09 (XU) | 0x16 | 4 bytes: [pan_dir, pan_speed, tilt_dir, tilt_speed] |
+| stop | 0x09 (XU) | 0x16 | [0x00, 0x01, 0x00, 0x01] |
+| center | 0x09 (XU) | 0x1A | 8 bytes, all zeros |
+| zoom | 0x01 (CT) | 0x0B | 2 bytes, little-endian |
 
 ## Key Libraries
 
+**ESP32:**
 - `WiFi.h` - ESP32 WiFi (built-in)
+- `ESPmDNS.h` - mDNS service discovery (built-in)
 - `WebSocketsClient` - Arduino WebSocket client (links2004/arduinoWebSockets)
-- `pb_encode.h` / `pb_decode.h` - nanopb for lightweight protobuf (optional)
+- `ArduinoJson` - JSON encoding/parsing (bblanchon/ArduinoJson)
+
+**Mac daemon:**
+- `IOKit.framework` - USB device access via IOKit (built into macOS, no root required)
+- `libwebsockets` - WebSocket server (Homebrew)
+- `cJSON` - JSON parsing (Homebrew)
+- `dns_sd.h` - mDNS advertisement (built into macOS)
+- `OpenSSL` - Required by libwebsockets headers (Homebrew)
 
 ## File Structure
 
 ```
-├── platformio.ini
+├── platformio.ini               # ESP32 build config
 ├── src/
-│   ├── main.cpp              # Setup and main loop
-│   ├── config.h              # Pin definitions, constants
-│   ├── joystick.h/cpp        # Analog input, deadzone, calibration
-│   ├── wifi_manager.h/cpp    # WiFi connection handling
-│   ├── websocket_client.h/cpp # WebSocket + protobuf messaging
-│   └── protocol.h/cpp        # Insta360 protocol message encoding
-├── include/
-│   └── insta360.pb.h         # Protobuf definitions (if using nanopb)
-└── lib/
+│   ├── main.cpp                 # Setup and main loop
+│   ├── config.h                 # Pin definitions, constants
+│   ├── joystick.h/cpp           # Analog input, deadzone, calibration
+│   ├── wifi_manager.h/cpp       # WiFi connection handling
+│   ├── websocket_client.h/cpp   # WebSocket client + JSON messaging + mDNS discovery
+│   ├── commands.h/cpp           # JSON command encoding
+│   ├── serial_cli.h/cpp         # Serial CLI for configuration
+│   ├── status_led.h/cpp         # LED status patterns
+│   └── captive_portal.h/cpp     # AP mode web config
+├── host/
+│   └── linkctl-daemon/
+│       ├── CMakeLists.txt       # Daemon build config
+│       ├── main.c               # Daemon entry point and event loop
+│       ├── camera.c/h           # libuvc camera control
+│       ├── server.c/h           # WebSocket server + JSON command dispatch
+│       └── mdns.c/h             # mDNS service advertisement
+└── docs/
+    └── 2026-03-29-direct-uvc-control-design.md  # Design document
 ```
