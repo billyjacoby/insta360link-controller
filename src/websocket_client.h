@@ -8,54 +8,56 @@
 enum class WSState {
     DISCONNECTED,
     CONNECTING,
-    CONNECTED,
-    AUTHENTICATED
+    CONNECTED      // Ready to send commands (no auth step needed)
 };
 
-class Insta360Client {
+class LinkCtlClient {
 public:
     void begin();
     void update();
 
-    bool connect(const String& host, uint16_t port, const String& token);
+    // Connect using explicit host/port (manual override).
+    bool connect(const String& host, uint16_t port);
+
+    // Discover daemon via mDNS and connect.
+    bool connectViaMdns();
+
     void disconnect();
 
     void sendPanTilt(const PanTiltCommand& cmd);
-    void sendZoom(uint32_t zoomValue);
+    void sendZoom(uint16_t zoomValue);
+    void sendStop();
+    void sendCenter();
+    void requestStatus();
 
     WSState getState() const { return _state; }
-    bool isConnected() const { return _state == WSState::AUTHENTICATED; }
+    bool isConnected() const { return _state == WSState::CONNECTED; }
+    bool isCameraConnected() const { return _cameraConnected; }
 
     void setHost(const String& host) { _host = host; }
     void setPort(uint16_t port) { _port = port; }
-    void setToken(const String& token) { _token = token; }
     String getHost() const { return _host; }
     uint16_t getPort() const { return _port; }
-
-    String getDeviceSerial() const { return _deviceSerial; }
 
 private:
     WebSocketsClient _ws;
     String _host;
     uint16_t _port = 0;
-    String _token;
-    String _deviceSerial;
     WSState _state = WSState::DISCONNECTED;
 
-    unsigned long _lastHeartbeat = 0;
-    unsigned long _lastReconnectAttempt = 0;
+    bool _cameraConnected = false;
+    uint16_t _cameraZoom = 0;
 
     PanTiltCommand _lastCmd = {0, 0, 0, 0};
 
     void onEvent(WStype_t type, uint8_t* payload, size_t length);
-    void handleMessage(uint8_t* payload, size_t length);
-    void sendHeartbeat();
-    void sendControlRequest();
+    void handleMessage(const char* json, size_t length);
+    void sendText(const String& msg);
 
     static void wsEventCallback(WStype_t type, uint8_t* payload, size_t length);
-    static Insta360Client* _instance;
+    static LinkCtlClient* _instance;
 };
 
-extern Insta360Client insta360Client;
+extern LinkCtlClient linkCtlClient;
 
 #endif

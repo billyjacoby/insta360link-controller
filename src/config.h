@@ -19,9 +19,12 @@
 
 // Timing
 #define JOYSTICK_READ_INTERVAL_MS 50
-#define HEARTBEAT_INTERVAL_MS 1000
 #define WEBSOCKET_RECONNECT_INTERVAL_MS 5000
+#define MDNS_RETRY_INTERVAL_MS 10000
 #define LED_BLINK_INTERVAL_MS 500
+
+// mDNS service discovery
+#define MDNS_SERVICE_NAME "insta360ctrl"
 
 // Serial CLI
 #define SERIAL_BAUD 115200
@@ -41,7 +44,7 @@
 #define NVS_KEY_WIFI_PASS "wifi_pass"
 #define NVS_KEY_WS_HOST "ws_host"
 #define NVS_KEY_WS_PORT "ws_port"
-#define NVS_KEY_WS_TOKEN "ws_token"
+// NVS_KEY_WS_TOKEN removed — no auth needed with direct UVC control
 #define NVS_KEY_INVERT_X "invert_x"
 #define NVS_KEY_INVERT_Y "invert_y"
 #define NVS_KEY_JOY_CENTER_X "joy_cx"

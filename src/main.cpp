@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <ESPmDNS.h>
 #include "config.h"
 #include "joystick.h"
 #include "wifi_manager.h"
@@ -9,8 +10,10 @@
 
 // Timing
 unsigned long lastJoystickRead = 0;
+unsigned long lastMdnsAttempt = 0;
 bool wasWifiConnected = false;
 bool portalMode = false;
+bool mdnsStarted = false;
 
 void updateStatusLed();
 
@@ -27,7 +30,7 @@ void setup() {
     joystick.setDeadzone(JOYSTICK_DEADZONE);
 
     wifiManager.begin();
-    insta360Client.begin();
+    linkCtlClient.begin();
     serialCli.begin();
 
     // Apply saved joystick settings
@@ -62,11 +65,12 @@ void loop() {
                 captivePortal.getWifiSsid(),
                 captivePortal.getWifiPassword()
             );
-            serialCli.setServerConfig(
-                captivePortal.getWsHost(),
-                captivePortal.getWsPort(),
-                captivePortal.getWsToken()
-            );
+            if (captivePortal.getWsPort() > 0) {
+                serialCli.setServerConfig(
+                    captivePortal.getWsHost(),
+                    captivePortal.getWsPort()
+                );
+            }
             Serial.println("[Main] Portal config saved, rebooting...");
             delay(500);
             ESP.restart();
@@ -90,7 +94,7 @@ void loop() {
     if (serialCli.portalRequested()) {
         serialCli.clearPortalRequest();
         wifiManager.disconnect();
-        insta360Client.disconnect();
+        linkCtlClient.disconnect();
         captivePortal.begin();
         portalMode = true;
         return;
@@ -99,7 +103,7 @@ void loop() {
     // Check for webconfig request from serial (network mode)
     if (serialCli.webConfigRequested()) {
         serialCli.clearWebConfigRequest();
-        insta360Client.disconnect();
+        linkCtlClient.disconnect();
         captivePortal.beginOnNetwork();
         return;
     }
@@ -113,37 +117,56 @@ void loop() {
                 captivePortal.getWifiSsid(),
                 captivePortal.getWifiPassword()
             );
-            serialCli.setServerConfig(
-                captivePortal.getWsHost(),
-                captivePortal.getWsPort(),
-                captivePortal.getWsToken()
-            );
+            if (captivePortal.getWsPort() > 0) {
+                serialCli.setServerConfig(
+                    captivePortal.getWsHost(),
+                    captivePortal.getWsPort()
+                );
+            }
             Serial.println("[Main] Config saved via web interface");
-            // Don't reboot - let user decide when to apply
         }
     }
 
     // Update all modules
     serialCli.update();
     wifiManager.update();
-    insta360Client.update();
+    linkCtlClient.update();
 
     // Update LED based on connection state
     updateStatusLed();
 
-    // Auto-connect to WebSocket when WiFi connects
+    // When WiFi connects, start mDNS and connect to daemon
     if (wifiManager.isConnected() && !wasWifiConnected) {
         wasWifiConnected = true;
+
+        // Initialize mDNS for service discovery
+        if (!mdnsStarted) {
+            if (MDNS.begin("insta360-controller")) {
+                mdnsStarted = true;
+                Serial.println("[Main] mDNS started");
+            }
+        }
+
+        // Try manual config first, then mDNS discovery
         if (serialCli.hasServerConfig()) {
-            Serial.println("[Main] WiFi connected, connecting to camera...");
-            insta360Client.connect(
-                serialCli.getWsHost(),
-                serialCli.getWsPort(),
-                serialCli.getWsToken()
-            );
+            Serial.println("[Main] WiFi connected, connecting to daemon (manual config)...");
+            linkCtlClient.connect(serialCli.getWsHost(), serialCli.getWsPort());
+        } else {
+            Serial.println("[Main] WiFi connected, discovering daemon via mDNS...");
+            linkCtlClient.connectViaMdns();
         }
     } else if (!wifiManager.isConnected() && wasWifiConnected) {
         wasWifiConnected = false;
+        mdnsStarted = false;
+    }
+
+    // Retry mDNS discovery if not connected and no manual config
+    if (wifiManager.isConnected() &&
+        linkCtlClient.getState() == WSState::DISCONNECTED &&
+        !serialCli.hasServerConfig() &&
+        millis() - lastMdnsAttempt >= MDNS_RETRY_INTERVAL_MS) {
+        lastMdnsAttempt = millis();
+        linkCtlClient.connectViaMdns();
     }
 
     // Read joystick and send commands at fixed interval
@@ -154,22 +177,23 @@ void loop() {
         PanTiltCommand cmd = joystick.toPanTilt(reading);
 
         // Send to camera if connected
-        if (insta360Client.isConnected()) {
-            insta360Client.sendPanTilt(cmd);
+        if (linkCtlClient.isConnected()) {
+            linkCtlClient.sendPanTilt(cmd);
         }
     }
 }
 
 void updateStatusLed() {
-    if (insta360Client.isConnected()) {
+    if (linkCtlClient.isConnected() && linkCtlClient.isCameraConnected()) {
         statusLed.setPattern(LedPattern::SOLID);
-    } else if (insta360Client.getState() == WSState::CONNECTING ||
-               insta360Client.getState() == WSState::CONNECTED) {
+    } else if (linkCtlClient.isConnected()) {
+        statusLed.setPattern(LedPattern::BLINK_FAST);
+    } else if (linkCtlClient.getState() == WSState::CONNECTING) {
         statusLed.setPattern(LedPattern::BLINK_FAST);
     } else if (wifiManager.getState() == WiFiState::CONNECTING) {
         statusLed.setPattern(LedPattern::BLINK_SLOW);
     } else if (wifiManager.isConnected()) {
-        statusLed.setPattern(LedPattern::BLINK_FAST);
+        statusLed.setPattern(LedPattern::BLINK_SLOW);
     } else {
         statusLed.setPattern(LedPattern::OFF);
     }

@@ -21,7 +21,6 @@ void SerialCLI::loadConfig() {
     _wifiPassword = _prefs.getString(NVS_KEY_WIFI_PASS, "");
     _wsHost = _prefs.getString(NVS_KEY_WS_HOST, "");
     _wsPort = _prefs.getUShort(NVS_KEY_WS_PORT, 0);
-    _wsToken = _prefs.getString(NVS_KEY_WS_TOKEN, "");
     _invertX = _prefs.getBool(NVS_KEY_INVERT_X, false);
     _invertY = _prefs.getBool(NVS_KEY_INVERT_Y, false);
     _joyCenterX = _prefs.getInt(NVS_KEY_JOY_CENTER_X, 2048);
@@ -35,7 +34,6 @@ void SerialCLI::saveConfig() {
     _prefs.putString(NVS_KEY_WIFI_PASS, _wifiPassword);
     _prefs.putString(NVS_KEY_WS_HOST, _wsHost);
     _prefs.putUShort(NVS_KEY_WS_PORT, _wsPort);
-    _prefs.putString(NVS_KEY_WS_TOKEN, _wsToken);
     _prefs.putBool(NVS_KEY_INVERT_X, _invertX);
     _prefs.putBool(NVS_KEY_INVERT_Y, _invertY);
     _prefs.putInt(NVS_KEY_JOY_CENTER_X, _joyCenterX);
@@ -50,10 +48,9 @@ void SerialCLI::setWifiConfig(const String& ssid, const String& password) {
     saveConfig();
 }
 
-void SerialCLI::setServerConfig(const String& host, uint16_t port, const String& token) {
+void SerialCLI::setServerConfig(const String& host, uint16_t port) {
     _wsHost = host;
     _wsPort = port;
-    _wsToken = token;
     saveConfig();
 }
 
@@ -72,36 +69,6 @@ void SerialCLI::update() {
         } else {
             _inputBuffer += c;
         }
-    }
-}
-
-void SerialCLI::parseQrUrl(const String& url) {
-    // Parse URL like: insta360link://connect?port=XXXXX&token=XXXXX
-    int portIdx = url.indexOf("port=");
-    int tokenIdx = url.indexOf("token=");
-
-    if (portIdx >= 0) {
-        int portEnd = url.indexOf('&', portIdx);
-        String portStr = (portEnd >= 0)
-            ? url.substring(portIdx + 5, portEnd)
-            : url.substring(portIdx + 5);
-        _wsPort = portStr.toInt();
-        Serial.print("Port: ");
-        Serial.println(_wsPort);
-    }
-
-    if (tokenIdx >= 0) {
-        int tokenEnd = url.indexOf('&', tokenIdx);
-        _wsToken = (tokenEnd >= 0)
-            ? url.substring(tokenIdx + 6, tokenEnd)
-            : url.substring(tokenIdx + 6);
-        Serial.println("Token: (set)");
-    }
-
-    if (portIdx >= 0 || tokenIdx >= 0) {
-        saveConfig();
-    } else {
-        Serial.println("Could not parse URL. Expected format: insta360link://connect?port=XXXXX&token=XXXXX");
     }
 }
 
@@ -158,40 +125,34 @@ void SerialCLI::processCommand(const String& line) {
     else if (cmd.startsWith("host ")) {
         _wsHost = cmd.substring(5);
         saveConfig();
-        Serial.print("WebSocket host set to: ");
+        Serial.print("Daemon host set to: ");
         Serial.println(_wsHost);
     }
     else if (cmd.startsWith("port ")) {
         _wsPort = cmd.substring(5).toInt();
         saveConfig();
-        Serial.print("WebSocket port set to: ");
+        Serial.print("Daemon port set to: ");
         Serial.println(_wsPort);
-    }
-    else if (cmd.startsWith("token ")) {
-        _wsToken = cmd.substring(6);
-        saveConfig();
-        Serial.print("WebSocket token set to: ");
-        Serial.println(_wsToken);
-    }
-    else if (cmd.startsWith("qr ")) {
-        // Parse QR code URL directly
-        parseQrUrl(cmd.substring(3));
     }
     else if (cmd == "connect") {
         if (!hasWifiConfig()) {
             Serial.println("WiFi not configured. Use: wifi <ssid> <password>");
             return;
         }
-        if (!hasServerConfig()) {
-            Serial.println("Server not configured. Use: host, port, token (or qr <url>)");
-            return;
-        }
         wifiManager.connect(_wifiSsid, _wifiPassword);
     }
     else if (cmd == "disconnect") {
-        insta360Client.disconnect();
+        linkCtlClient.disconnect();
         wifiManager.disconnect();
         Serial.println("Disconnected");
+    }
+    else if (cmd == "stop") {
+        linkCtlClient.sendStop();
+        Serial.println("Stop command sent");
+    }
+    else if (cmd == "center") {
+        linkCtlClient.sendCenter();
+        Serial.println("Center command sent");
     }
     else if (cmd == "portal") {
         _portalRequested = true;
@@ -247,7 +208,6 @@ void SerialCLI::processCommand(const String& line) {
         _wifiPassword = "";
         _wsHost = "";
         _wsPort = 0;
-        _wsToken = "";
         _invertX = false;
         _invertY = false;
         _joyCenterX = 2048;
@@ -270,10 +230,8 @@ void SerialCLI::printHelp() {
     Serial.println();
     Serial.println("=== Configuration ===");
     Serial.println("  wifi <ssid> [password]  - Set WiFi credentials");
-    Serial.println("  host <ip>               - Set Mac IP address");
-    Serial.println("  port <port>             - Set WebSocket port");
-    Serial.println("  token <token>           - Set auth token");
-    Serial.println("  qr <url>                - Parse QR code URL (extracts port & token)");
+    Serial.println("  host <ip>               - Set daemon IP (optional, mDNS used by default)");
+    Serial.println("  port <port>             - Set daemon port (optional, mDNS used by default)");
     Serial.println("  portal                  - Start WiFi config portal (AP mode)");
     Serial.println("  webconfig               - Start web config on current network");
     Serial.println();
@@ -284,6 +242,10 @@ void SerialCLI::printHelp() {
 #ifdef DEV_WIFI_SSID
     Serial.println("  devwifi                 - Connect to dev WiFi (hardcoded)");
 #endif
+    Serial.println();
+    Serial.println("=== Camera ===");
+    Serial.println("  stop                    - Stop gimbal movement");
+    Serial.println("  center                  - Center gimbal");
     Serial.println();
     Serial.println("=== Joystick ===");
     Serial.println("  joy                     - Test joystick (5 sec)");
@@ -315,27 +277,26 @@ void SerialCLI::printStatus() {
             break;
     }
 
-    Serial.print("Server: ");
+    Serial.print("Daemon: ");
     if (_wsHost.length() > 0 && _wsPort > 0) {
         Serial.print(_wsHost);
         Serial.print(":");
         Serial.println(_wsPort);
     } else {
-        Serial.println("(not set)");
+        Serial.println("(auto-discover via mDNS)");
     }
 
-    Serial.print("Token: ");
-    Serial.println(_wsToken.length() > 0 ? "(set)" : "(not set)");
-
-    Serial.print("Camera State: ");
-    switch (insta360Client.getState()) {
+    Serial.print("Connection: ");
+    switch (linkCtlClient.getState()) {
         case WSState::DISCONNECTED: Serial.println("Disconnected"); break;
         case WSState::CONNECTING: Serial.println("Connecting..."); break;
-        case WSState::CONNECTED: Serial.println("Connected (authenticating)"); break;
-        case WSState::AUTHENTICATED:
-            Serial.print("Authenticated (");
-            Serial.print(insta360Client.getDeviceSerial());
-            Serial.println(")");
+        case WSState::CONNECTED:
+            Serial.print("Connected");
+            if (linkCtlClient.isCameraConnected()) {
+                Serial.println(" (camera ready)");
+            } else {
+                Serial.println(" (camera not found)");
+            }
             break;
     }
 
