@@ -28,7 +28,7 @@ static void broadcast_json(const char *json);
 
 static struct lws_protocols protocols[] = {
     {
-        .name = "linkctl",
+        .name = "arduino",  // Match ESP32 WebSocketsClient's default subprotocol
         .callback = ws_callback,
         .per_session_data_size = sizeof(struct per_session_data),
         .rx_buffer_size = 4096,

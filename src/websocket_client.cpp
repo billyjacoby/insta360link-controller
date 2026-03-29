@@ -101,11 +101,15 @@ void LinkCtlClient::handleMessage(const char* json, size_t length) {
     if (!type) return;
 
     if (strcmp(type, "status") == 0) {
-        _cameraConnected = doc["camera_connected"] | false;
-        _cameraZoom = doc["zoom"] | 0;
-        Serial.printf("[WS] Status: camera=%s zoom=%d\n",
-                      _cameraConnected ? "connected" : "disconnected",
-                      _cameraZoom);
+        bool newConnected = doc["camera_connected"] | false;
+        uint16_t newZoom = doc["zoom"] | 0;
+        if (newConnected != _cameraConnected || newZoom != _cameraZoom) {
+            Serial.printf("[WS] Status: camera=%s zoom=%d\n",
+                          newConnected ? "connected" : "disconnected",
+                          newZoom);
+        }
+        _cameraConnected = newConnected;
+        _cameraZoom = newZoom;
     } else if (strcmp(type, "error") == 0) {
         const char* msg = doc["message"] | "unknown error";
         Serial.printf("[WS] Error: %s\n", msg);
