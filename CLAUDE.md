@@ -47,7 +47,7 @@ pio run --target upload && pio device monitor  # Build, upload, monitor
 
 ```bash
 # Install dependencies
-brew install libuvc libwebsockets cjson
+brew install libwebsockets cjson openssl@3
 
 # Build
 cd host/linkctl-daemon
@@ -104,10 +104,11 @@ JSON over WebSocket (text frames). ESP32 sends commands, daemon responds with st
 - `ArduinoJson` - JSON encoding/parsing (bblanchon/ArduinoJson)
 
 **Mac daemon:**
-- `libuvc` - Direct UVC device control
-- `libwebsockets` - WebSocket server
-- `cJSON` - JSON parsing
+- `IOKit.framework` - USB device access via IOKit (built into macOS, no root required)
+- `libwebsockets` - WebSocket server (Homebrew)
+- `cJSON` - JSON parsing (Homebrew)
 - `dns_sd.h` - mDNS advertisement (built into macOS)
+- `OpenSSL` - Required by libwebsockets headers (Homebrew)
 
 ## File Structure
 
