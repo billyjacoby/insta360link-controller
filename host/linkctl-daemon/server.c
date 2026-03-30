@@ -206,8 +206,14 @@ static void handle_command(struct lws *wsi, const char *json, size_t len) {
         if ((item = cJSON_GetObjectItem(root, "tilt_dir")))   tilt_dir = item->valueint;
         if ((item = cJSON_GetObjectItem(root, "tilt_speed"))) tilt_speed = item->valueint;
 
-        rc = camera_pan_tilt((uint8_t)pan_dir, (uint8_t)pan_speed,
-                             (uint8_t)tilt_dir, (uint8_t)tilt_speed);
+        // Speed 0 on both axes means stop — the camera requires the
+        // explicit stop payload [0,1,0,1], not [0,0,0,0].
+        if (pan_speed == 0 && tilt_speed == 0) {
+            rc = camera_stop();
+        } else {
+            rc = camera_pan_tilt((uint8_t)pan_dir, (uint8_t)pan_speed,
+                                 (uint8_t)tilt_dir, (uint8_t)tilt_speed);
+        }
     } else if (strcmp(cmd_str, "zoom") == 0) {
         cJSON *val = cJSON_GetObjectItem(root, "value");
         if (cJSON_IsNumber(val)) {
