@@ -55,3 +55,24 @@ if(APPLE)
 endif()
 
 install(TARGETS linkctl-daemon DESTINATION bin)
+
+# --- Service management targets (macOS launchd) ---
+
+# Install plist to ~/Library/LaunchAgents and load the service
+add_custom_target(service-install
+    COMMAND ${CMAKE_SOURCE_DIR}/service.sh install ${CMAKE_BINARY_DIR}/linkctl-daemon
+    COMMENT "Installing and loading launchd service"
+)
+
+# Stop and remove the launchd service
+add_custom_target(service-uninstall
+    COMMAND ${CMAKE_SOURCE_DIR}/service.sh uninstall
+    COMMENT "Removing launchd service"
+)
+
+# Rebuild and restart the service
+add_custom_target(restart
+    COMMAND ${CMAKE_MAKE_PROGRAM} linkctl-daemon
+    COMMAND ${CMAKE_SOURCE_DIR}/service.sh restart
+    COMMENT "Rebuilding and restarting daemon"
+)
