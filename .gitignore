@@ -1,3 +1,11 @@
 .pio
 .vscode
 .claude/settings.local.json
+
+# KiCad
+*.lck
+*-backups/
+*-bak
+*.kicad_prl
+fp-info-cache
+hardware/.history/
