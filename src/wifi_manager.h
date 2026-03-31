@@ -31,7 +31,9 @@ private:
     String _password;
     WiFiState _state = WiFiState::DISCONNECTED;
     unsigned long _lastConnectAttempt = 0;
+    unsigned long _lastRetryAttempt = 0;
     static const unsigned long CONNECT_TIMEOUT_MS = 10000;
+    static const unsigned long RETRY_INTERVAL_MS = 15000;
 };
 
 extern WiFiManager wifiManager;

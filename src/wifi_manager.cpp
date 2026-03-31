@@ -23,6 +23,13 @@ void WiFiManager::update() {
             _state = WiFiState::DISCONNECTED;
             Serial.println("[WiFi] Disconnected");
         }
+    } else if (_state == WiFiState::DISCONNECTED && _ssid.length() > 0) {
+        // Auto-retry with stored credentials
+        if (millis() - _lastRetryAttempt >= RETRY_INTERVAL_MS) {
+            _lastRetryAttempt = millis();
+            Serial.println("[WiFi] Retrying connection...");
+            connect(_ssid, _password);
+        }
     }
 }
 
