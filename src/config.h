@@ -2,11 +2,22 @@
 #define CONFIG_H
 
 // Joystick pins (ADC1 only - ADC2 conflicts with WiFi)
+// Pin assignments are set per-board via platformio.ini build_flags.
+// Defaults here are for the original ESP32 dev board.
+#ifndef JOYSTICK_X_PIN
 #define JOYSTICK_X_PIN 34
+#endif
+#ifndef JOYSTICK_Y_PIN
 #define JOYSTICK_Y_PIN 35
+#endif
+#ifndef JOYSTICK_BTN_PIN
+#define JOYSTICK_BTN_PIN 32
+#endif
 
-// Status LED (built-in on most ESP32 dev boards)
+// Status LED
+#ifndef STATUS_LED_PIN
 #define STATUS_LED_PIN 2
+#endif
 
 // Joystick configuration
 #define JOYSTICK_DEADZONE 0.1f
@@ -19,6 +30,7 @@
 
 // Timing
 #define JOYSTICK_READ_INTERVAL_MS 50
+#define BUTTON_DEBOUNCE_MS 50
 #define WEBSOCKET_RECONNECT_INTERVAL_MS 5000
 #define MDNS_RETRY_INTERVAL_MS 10000
 #define LED_BLINK_INTERVAL_MS 500

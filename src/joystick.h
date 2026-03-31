@@ -20,6 +20,8 @@ public:
     void begin(uint8_t xPin, uint8_t yPin);
     JoystickReading read();
     PanTiltCommand toPanTilt(const JoystickReading& reading);
+    void beginButton(uint8_t btnPin);
+    bool buttonPressed();
 
     void setDeadzone(float deadzone) { _deadzone = deadzone; }
     void setInvertX(bool invert) { _invertX = invert; }
@@ -35,6 +37,11 @@ private:
     bool _invertY = false;
     int _centerX = 2048;
     int _centerY = 2048;
+
+    uint8_t _btnPin = 0;
+    bool _btnEnabled = false;
+    bool _lastBtnState = HIGH;
+    unsigned long _lastBtnChangeMs = 0;
 
     float normalizeAxis(int rawValue, int center);
     float applyDeadzone(float value);

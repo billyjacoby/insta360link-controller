@@ -31,6 +31,30 @@ JoystickReading Joystick::read() {
     return { x, y };
 }
 
+void Joystick::beginButton(uint8_t btnPin) {
+    _btnPin = btnPin;
+    _btnEnabled = true;
+    pinMode(_btnPin, INPUT_PULLUP);
+    _lastBtnState = digitalRead(_btnPin);
+    _lastBtnChangeMs = millis();
+}
+
+bool Joystick::buttonPressed() {
+    if (!_btnEnabled) return false;
+
+    bool currentState = digitalRead(_btnPin);
+    if (currentState != _lastBtnState &&
+        (millis() - _lastBtnChangeMs) >= BUTTON_DEBOUNCE_MS) {
+        _lastBtnState = currentState;
+        _lastBtnChangeMs = millis();
+        // LOW = pressed (INPUT_PULLUP, button connects to GND)
+        if (currentState == LOW) {
+            return true;
+        }
+    }
+    return false;
+}
+
 float Joystick::normalizeAxis(int rawValue, int center) {
     // Convert 0-4095 to -1.0 to 1.0 using calibrated center
     float normalized;
@@ -60,13 +84,14 @@ float Joystick::applyDeadzone(float value) {
 PanTiltCommand Joystick::toPanTilt(const JoystickReading& reading) {
     PanTiltCommand cmd;
 
-    // Pan (X axis)
+    // Pan (X axis) — direction is only set if speed is non-zero,
+    // otherwise the camera interprets dir + speed=0 as minimum-speed movement.
     if (reading.x > 0) {
-        cmd.panDirection = 1;
         cmd.panSpeed = (uint8_t)(reading.x * PAN_MAX_SPEED);
+        cmd.panDirection = cmd.panSpeed > 0 ? 1 : 0;
     } else if (reading.x < 0) {
-        cmd.panDirection = -1;
         cmd.panSpeed = (uint8_t)(-reading.x * PAN_MAX_SPEED);
+        cmd.panDirection = cmd.panSpeed > 0 ? -1 : 0;
     } else {
         cmd.panDirection = 0;
         cmd.panSpeed = 0;
@@ -74,11 +99,11 @@ PanTiltCommand Joystick::toPanTilt(const JoystickReading& reading) {
 
     // Tilt (Y axis)
     if (reading.y > 0) {
-        cmd.tiltDirection = 1;
         cmd.tiltSpeed = (uint8_t)(reading.y * TILT_MAX_SPEED);
+        cmd.tiltDirection = cmd.tiltSpeed > 0 ? 1 : 0;
     } else if (reading.y < 0) {
-        cmd.tiltDirection = -1;
         cmd.tiltSpeed = (uint8_t)(-reading.y * TILT_MAX_SPEED);
+        cmd.tiltDirection = cmd.tiltSpeed > 0 ? -1 : 0;
     } else {
         cmd.tiltDirection = 0;
         cmd.tiltSpeed = 0;

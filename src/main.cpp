@@ -28,6 +28,7 @@ void setup() {
     // Initialize modules
     joystick.begin(JOYSTICK_X_PIN, JOYSTICK_Y_PIN);
     joystick.setDeadzone(JOYSTICK_DEADZONE);
+    joystick.beginButton(JOYSTICK_BTN_PIN);
 
     wifiManager.begin();
     linkCtlClient.begin();
@@ -179,6 +180,14 @@ void loop() {
         // Send to camera if connected
         if (linkCtlClient.isConnected()) {
             linkCtlClient.sendPanTilt(cmd);
+        }
+
+        // Check center button
+        if (joystick.buttonPressed()) {
+            if (linkCtlClient.isConnected()) {
+                linkCtlClient.sendCenter();
+                Serial.println("[Main] Center button pressed");
+            }
         }
     }
 }

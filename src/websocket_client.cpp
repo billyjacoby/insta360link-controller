@@ -74,6 +74,7 @@ void LinkCtlClient::onEvent(WStype_t type, uint8_t* payload, size_t length) {
         case WStype_CONNECTED:
             Serial.println("[WS] Connected");
             _state = WSState::CONNECTED;
+            sendStop();  // Ensure camera is stopped on connect
             break;
 
         case WStype_TEXT:
