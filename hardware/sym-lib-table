@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "Insta360-Joystick") (type "KiCad") (uri "${KIPRJMOD}/Components/Insta360-Joystick.kicad_sym") (options "") (descr ""))
+)
