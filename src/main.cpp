@@ -17,6 +17,7 @@ bool portalMode = false;
 bool mdnsStarted = false;
 
 void updateStatusLed();
+void savePortalConfig();
 
 void setup() {
     Serial.begin(SERIAL_BAUD);
@@ -66,16 +67,7 @@ void loop() {
 
         // Check if portal finished configuration
         if (captivePortal.isConfigured()) {
-            serialCli.setWifiConfig(
-                captivePortal.getWifiSsid(),
-                captivePortal.getWifiPassword()
-            );
-            if (captivePortal.getWsPort() > 0) {
-                serialCli.setServerConfig(
-                    captivePortal.getWsHost(),
-                    captivePortal.getWsPort()
-                );
-            }
+            savePortalConfig();
             Serial.println("[Main] Portal config saved, rebooting...");
             delay(500);
             ESP.restart();
@@ -118,16 +110,7 @@ void loop() {
         captivePortal.update();
         // Check if config was saved
         if (captivePortal.isConfigured()) {
-            serialCli.setWifiConfig(
-                captivePortal.getWifiSsid(),
-                captivePortal.getWifiPassword()
-            );
-            if (captivePortal.getWsPort() > 0) {
-                serialCli.setServerConfig(
-                    captivePortal.getWsHost(),
-                    captivePortal.getWsPort()
-                );
-            }
+            savePortalConfig();
             Serial.println("[Main] Config saved via web interface");
         }
     }
@@ -216,5 +199,18 @@ void updateStatusLed() {
         statusLed.setPattern(LedPattern::BLINK_SLOW);
     } else {
         statusLed.setPattern(LedPattern::OFF);
+    }
+}
+
+void savePortalConfig() {
+    serialCli.setWifiConfig(
+        captivePortal.getWifiSsid(),
+        captivePortal.getWifiPassword()
+    );
+    if (captivePortal.getWsPort() > 0) {
+        serialCli.setServerConfig(
+            captivePortal.getWsHost(),
+            captivePortal.getWsPort()
+        );
     }
 }

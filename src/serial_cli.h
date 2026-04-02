@@ -18,6 +18,7 @@ public:
     bool getInvertY() const { return _invertY; }
     int getJoyCenterX() const { return _joyCenterX; }
     int getJoyCenterY() const { return _joyCenterY; }
+
     bool hasWifiConfig() const { return _wifiSsid.length() > 0; }
     // Server config is optional — mDNS discovery is the primary method
     bool hasServerConfig() const { return _wsHost.length() > 0 && _wsPort > 0; }

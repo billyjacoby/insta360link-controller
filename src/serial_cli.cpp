@@ -324,11 +324,10 @@ void SerialCLI::testZoomPot() {
     delay(50);
     while (Serial.available()) Serial.read();
 
-    Serial.println("Zoom potentiometer test (derivative mode)");
-    Serial.println("Turn the pot to see ADC values and delta. Press Enter to stop.");
+    Serial.println("Zoom potentiometer test");
+    Serial.println("Turn the pot to see ADC and mapped zoom. Press Enter to stop.");
     Serial.println();
 
-    int lastRaw = zoomPot.readRaw();
     unsigned long lastPrint = 0;
 
     while (true) {
@@ -339,10 +338,9 @@ void SerialCLI::testZoomPot() {
 
         if (millis() - lastPrint >= 200) {  // 5 Hz
             lastPrint = millis();
-            int current = zoomPot.readRaw();
-            int delta = current - lastRaw;
-            lastRaw = current;
-            Serial.printf("  ADC: %d  delta: %+d      \r", current, delta);
+            int raw = zoomPot.readRaw();
+            int zoom = map(raw, 0, 4095, ZOOM_MIN, ZOOM_MAX);
+            Serial.printf("  ADC: %d  zoom: %d      \r", raw, zoom);
         }
 
         delay(10);

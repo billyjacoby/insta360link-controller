@@ -33,7 +33,6 @@ public:
     WSState getState() const { return _state; }
     bool isConnected() const { return _state == WSState::CONNECTED; }
     bool isCameraConnected() const { return _cameraConnected; }
-    uint16_t getCameraZoom() const { return _cameraZoom; }
 
     void setHost(const String& host) { _host = host; }
     void setPort(uint16_t port) { _port = port; }
