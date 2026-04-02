@@ -1,5 +1,4 @@
 #include "websocket_client.h"
-#include "commands.h"
 #include "config.h"
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
@@ -134,26 +133,39 @@ void LinkCtlClient::sendPanTilt(const PanTiltCommand& cmd) {
 
     if (_state != WSState::CONNECTED) return;
 
-    sendText(cmdPanTilt(cmd.panDirection, cmd.panSpeed,
-                        cmd.tiltDirection, cmd.tiltSpeed));
+    JsonDocument doc;
+    doc["cmd"] = "pan_tilt";
+    doc["pan_dir"] = (uint8_t)cmd.panDirection;
+    doc["pan_speed"] = cmd.panSpeed;
+    doc["tilt_dir"] = (uint8_t)cmd.tiltDirection;
+    doc["tilt_speed"] = cmd.tiltSpeed;
+    String out;
+    serializeJson(doc, out);
+    sendText(out);
 }
 
 void LinkCtlClient::sendZoom(uint16_t zoomValue) {
     if (_state != WSState::CONNECTED) return;
-    sendText(cmdZoom(zoomValue));
+
+    JsonDocument doc;
+    doc["cmd"] = "zoom";
+    doc["value"] = zoomValue;
+    String out;
+    serializeJson(doc, out);
+    sendText(out);
 }
 
 void LinkCtlClient::sendStop() {
     if (_state != WSState::CONNECTED) return;
-    sendText(cmdStop());
+    sendText("{\"cmd\":\"stop\"}");
 }
 
 void LinkCtlClient::sendCenter() {
     if (_state != WSState::CONNECTED) return;
-    sendText(cmdCenter());
+    sendText("{\"cmd\":\"center\"}");
 }
 
 void LinkCtlClient::requestStatus() {
     if (_state != WSState::CONNECTED) return;
-    sendText(cmdStatus());
+    sendText("{\"cmd\":\"status\"}");
 }
