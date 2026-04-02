@@ -185,8 +185,8 @@ void loop() {
         if (linkCtlClient.isConnected()) {
             linkCtlClient.sendPanTilt(cmd);
 
-            // Zoom: update target from pot, send if changed
-            if (zoomPot.update(linkCtlClient.getCameraZoom())) {
+            // Zoom: pot position maps directly to zoom level
+            if (zoomPot.update()) {
                 linkCtlClient.sendZoom(zoomPot.getTargetZoom());
             }
         }
