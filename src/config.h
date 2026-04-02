@@ -14,6 +14,11 @@
 #define JOYSTICK_BTN_PIN 32
 #endif
 
+// Zoom potentiometer pin (ADC1 only - ADC2 conflicts with WiFi)
+#ifndef ZOOM_POT_PIN
+#define ZOOM_POT_PIN 33   // Default: breadboard prototype (GPIO33, ADC1)
+#endif
+
 // Status LED
 #ifndef STATUS_LED_PIN
 #define STATUS_LED_PIN 2
@@ -23,6 +28,13 @@
 #define JOYSTICK_DEADZONE 0.1f
 #define JOYSTICK_CENTER 2048      // 12-bit ADC midpoint
 #define JOYSTICK_MAX 4095
+
+// Zoom potentiometer configuration (derivative-based: zoom speed tracks pot turn rate)
+#define ZOOM_ADC_DEADZONE 30         // Min ADC change per cycle to register as movement
+#define ZOOM_DERIVATIVE_GAIN 0.125f   // Zoom units per ADC unit of change
+#define ZOOM_MIN 100                 // Camera minimum zoom
+#define ZOOM_MAX 400                 // Camera maximum zoom
+#define ZOOM_DEFAULT ZOOM_MIN        // Default zoom (1x, sent on home button press)
 
 // Pan/Tilt speed limits (from Insta360 protocol)
 #define PAN_MAX_SPEED 30

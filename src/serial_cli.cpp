@@ -3,6 +3,7 @@
 #include "wifi_manager.h"
 #include "websocket_client.h"
 #include "joystick.h"
+#include "zoom.h"
 
 SerialCLI serialCli;
 
@@ -189,6 +190,9 @@ void SerialCLI::processCommand(const String& line) {
     else if (cmd == "calibrate") {
         calibrateJoystick();
     }
+    else if (cmd == "calzoom") {
+        testZoomPot();
+    }
     else if (cmd == "joy") {
         // Show live joystick values for 5 seconds
         Serial.println("Joystick test (5 seconds):");
@@ -250,6 +254,7 @@ void SerialCLI::printHelp() {
     Serial.println("=== Joystick ===");
     Serial.println("  joy                     - Test joystick (5 sec)");
     Serial.println("  calibrate               - Calibrate joystick center");
+    Serial.println("  calzoom                 - Test zoom potentiometer");
     Serial.println("  invertx                 - Toggle X-axis inversion");
     Serial.println("  inverty                 - Toggle Y-axis inversion");
     Serial.println();
@@ -312,4 +317,36 @@ void SerialCLI::printStatus() {
     Serial.println(")");
 
     Serial.println("--------------");
+}
+
+void SerialCLI::testZoomPot() {
+    // Drain leftover \r\n from the command that triggered this
+    delay(50);
+    while (Serial.available()) Serial.read();
+
+    Serial.println("Zoom potentiometer test (derivative mode)");
+    Serial.println("Turn the pot to see ADC values and delta. Press Enter to stop.");
+    Serial.println();
+
+    int lastRaw = zoomPot.readRaw();
+    unsigned long lastPrint = 0;
+
+    while (true) {
+        if (Serial.available()) {
+            char c = Serial.read();
+            if (c == '\n' || c == '\r') break;
+        }
+
+        if (millis() - lastPrint >= 200) {  // 5 Hz
+            lastPrint = millis();
+            int current = zoomPot.readRaw();
+            int delta = current - lastRaw;
+            lastRaw = current;
+            Serial.printf("  ADC: %d  delta: %+d      \r", current, delta);
+        }
+
+        delay(10);
+    }
+
+    Serial.println("\nDone");
 }

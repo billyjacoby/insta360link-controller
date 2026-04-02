@@ -7,6 +7,7 @@
 #include "serial_cli.h"
 #include "status_led.h"
 #include "captive_portal.h"
+#include "zoom.h"
 
 // Timing
 unsigned long lastJoystickRead = 0;
@@ -39,6 +40,9 @@ void setup() {
     joystick.setInvertY(serialCli.getInvertY());
     joystick.setCenterX(serialCli.getJoyCenterX());
     joystick.setCenterY(serialCli.getJoyCenterY());
+
+    // Initialize zoom potentiometer
+    zoomPot.begin(ZOOM_POT_PIN);
 
     // Auto-connect if config exists, otherwise start portal
     if (serialCli.hasWifiConfig()) {
@@ -180,13 +184,20 @@ void loop() {
         // Send to camera if connected
         if (linkCtlClient.isConnected()) {
             linkCtlClient.sendPanTilt(cmd);
+
+            // Zoom: update target from pot, send if changed
+            if (zoomPot.update(linkCtlClient.getCameraZoom())) {
+                linkCtlClient.sendZoom(zoomPot.getTargetZoom());
+            }
         }
 
-        // Check center button
+        // Check home button — center gimbal and reset zoom
         if (joystick.buttonPressed()) {
             if (linkCtlClient.isConnected()) {
                 linkCtlClient.sendCenter();
-                Serial.println("[Main] Center button pressed");
+                zoomPot.resetToDefault();
+                linkCtlClient.sendZoom(zoomPot.getTargetZoom());
+                Serial.println("[Main] Home button pressed — centered + zoom reset");
             }
         }
     }

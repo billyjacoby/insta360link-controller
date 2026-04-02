@@ -18,7 +18,6 @@ public:
     bool getInvertY() const { return _invertY; }
     int getJoyCenterX() const { return _joyCenterX; }
     int getJoyCenterY() const { return _joyCenterY; }
-
     bool hasWifiConfig() const { return _wifiSsid.length() > 0; }
     // Server config is optional — mDNS discovery is the primary method
     bool hasServerConfig() const { return _wsHost.length() > 0 && _wsPort > 0; }
@@ -49,13 +48,13 @@ private:
     bool _invertY = false;
     int _joyCenterX = 2048;
     int _joyCenterY = 2048;
-
     void loadConfig();
     void saveConfig();
     void processCommand(const String& line);
     void printHelp();
     void printStatus();
     void calibrateJoystick();
+    void testZoomPot();
 };
 
 extern SerialCLI serialCli;
