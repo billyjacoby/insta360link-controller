@@ -78,17 +78,10 @@ void SerialCLI::calibrateJoystick() {
     Serial.println("Release the joystick and keep it centered...");
     delay(2000);
 
-    // Read multiple samples and average
-    long sumX = 0, sumY = 0;
-    const int samples = 50;
-    for (int i = 0; i < samples; i++) {
-        sumX += analogRead(JOYSTICK_X_PIN);
-        sumY += analogRead(JOYSTICK_Y_PIN);
-        delay(20);
-    }
+    joystick.calibrate(50, 20);
 
-    _joyCenterX = sumX / samples;
-    _joyCenterY = sumY / samples;
+    _joyCenterX = joystick.getCenterX();
+    _joyCenterY = joystick.getCenterY();
 
     Serial.print("Center X: ");
     Serial.println(_joyCenterX);
@@ -96,7 +89,7 @@ void SerialCLI::calibrateJoystick() {
     Serial.println(_joyCenterY);
 
     saveConfig();
-    Serial.println("Calibration complete. Restart to apply.");
+    Serial.println("Calibration saved to flash.");
 }
 
 void SerialCLI::processCommand(const String& line) {
@@ -311,9 +304,9 @@ void SerialCLI::printStatus() {
     Serial.print(" InvertY=");
     Serial.print(_invertY ? "ON" : "OFF");
     Serial.print(" Center=(");
-    Serial.print(_joyCenterX);
+    Serial.print(joystick.getCenterX());
     Serial.print(",");
-    Serial.print(_joyCenterY);
+    Serial.print(joystick.getCenterY());
     Serial.println(")");
 
     Serial.println("--------------");
