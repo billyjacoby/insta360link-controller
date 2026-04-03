@@ -17,13 +17,19 @@ Now that I've implemented a system daemon for controlling an Insta360 Link and t
 |---|---|---|
 | Joystick X (pan) | 4 | ADC1 |
 | Joystick Y (tilt) | 5 | ADC1 |
-| Joystick button (home) | 12 | Internal pull-up, active low |
+| Joystick button (home) | 13 | Internal pull-up, active low |
 | Zoom potentiometer | 6 | ADC1 |
+| Fuel gauge alert (MAX17048) | 7 | Active low, internal pull-up, interrupt |
 | I2C SDA (OLED + fuel gauge) | 8 | S3 default I2C SDA |
 | I2C SCL (OLED + fuel gauge) | 9 | S3 default I2C SCL |
 | Calibrate button | 14 | Internal pull-up, active low |
 | Spare button | 15 | Internal pull-up, active low |
-| Status LED | 2 | External LED |
+| BQ25185 STAT1 | 10 | Open-drain, ext 10kΩ pull-up to 3.3V |
+| BQ25185 STAT2 | 11 | Open-drain, ext 10kΩ pull-up to 3.3V |
+| BQ25185 /CE | 12 | Active low, drive high to disable charging |
+| Status LED (connectivity) | 16 | External LED, replaces GPIO 2 from prototype |
+| Status LED (TBD) | 17 | External LED |
+| Status LED (TBD) | 18 | External LED |
 | USB D- | 19 | Native USB (reserved) |
 | USB D+ | 20 | Native USB (reserved) |
 
@@ -66,7 +72,7 @@ Now that I've implemented a system daemon for controlling an Insta360 Link and t
 ### Power
 - Battery: Jauch LI INR18650JD-30P (3.6V, 3000mAh, 1A charge rate)
 - Charger + power path: [BQ25185DLHR](https://www.digikey.com/en/products/detail/texas-instruments/BQ25185DLHR/21769368) (1A CC/CV, UV/OV/OC/SC/OT protection)
-- Fuel gauge: [MAX17048G+T10](https://www.digikey.com/en/products/detail/analog-devices-inc-maxim-integrated/MAX17048G-T10/3758921) (I2C, ModelGauge, no sense resistor)
+- Fuel gauge: [MAX17048G+T10](https://www.digikey.com/en/products/detail/analog-devices-inc-maxim-integrated/MAX17048G-T10/3758921) (I2C, ModelGauge, no sense resistor, ALRT on GPIO 7)
 - 3.3V LDO: [AP2112K-3.3TRG1](https://www.digikey.com/en/products/detail/diodes-incorporated/AP2112K-3-3TRG1/4470746) (600mA, SOT-23-5)
 - Hard on/off switch between BQ25185 SYS output and LDO
 - USB-C for charging + serial flash (native USB on S3)

@@ -7633,7 +7633,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Connector_PinHeader_1.27mm:PinHeader_1x05_P1.27mm_Vertical"
 			(at 273.05 132.08 0)
 			(hide yes)
 			(show_name no)
@@ -7802,7 +7802,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 47.2948 172.72 0)
 			(hide yes)
 			(show_name no)
@@ -7885,7 +7885,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 128.016 147.066 90)
 			(hide yes)
 			(show_name no)
@@ -8123,7 +8123,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 199.39 36.5252 0)
 			(hide yes)
 			(show_name no)
@@ -8193,7 +8193,7 @@
 				)
 			)
 		)
-		(property "Value" "SW_SPST"
+		(property "Value" "SW_PWR"
 			(at 121.92 140.97 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8203,7 +8203,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "INSTA360:SW_L101011ML04Q"
 			(at 121.92 143.51 0)
 			(hide yes)
 			(show_name no)
@@ -8519,7 +8519,7 @@
 				)
 			)
 		)
-		(property "Footprint" "WSON10_DLH_TEX"
+		(property "Footprint" "INSTA360:WSON10_DLH_TEX"
 			(at 63.5 170.18 0)
 			(hide yes)
 			(show_name no)
@@ -8630,7 +8630,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
 			(at 273.05 156.21 0)
 			(hide yes)
 			(show_name no)
@@ -8713,7 +8713,7 @@
 				)
 			)
 		)
-		(property "Footprint" "21-0168E_T822-3_MXM"
+		(property "Footprint" "INSTA360:21-0168E_T822-3_MXM"
 			(at 30.48 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -8815,7 +8815,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 212.344 162.814 90)
 			(hide yes)
 			(show_name no)
@@ -8895,7 +8895,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal"
 			(at 34.29 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -9252,7 +9252,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 145.034 176.784 90)
 			(hide yes)
 			(show_name no)
@@ -9410,7 +9410,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Diode_SMD:D_1206_3216Metric"
 			(at 201.93 156.21 0)
 			(hide yes)
 			(show_name no)
@@ -9500,7 +9500,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Diode_SMD:D_1206_3216Metric"
 			(at 201.93 163.83 0)
 			(hide yes)
 			(show_name no)
@@ -9669,7 +9669,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 87.884 29.464 90)
 			(hide yes)
 			(show_name no)
@@ -9995,7 +9995,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 87.884 26.924 90)
 			(hide yes)
 			(show_name no)
@@ -10077,7 +10077,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 126.0348 134.62 0)
 			(hide yes)
 			(show_name no)
@@ -10156,7 +10156,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Diode_SMD:D_1206_3216Metric"
 			(at 201.93 148.59 0)
 			(hide yes)
 			(show_name no)
@@ -10840,7 +10840,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 171.196 151.384 90)
 			(hide yes)
 			(show_name no)
@@ -11001,7 +11001,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "INSTA360:18650_Holder"
 			(at 20.32 153.416 90)
 			(hide yes)
 			(show_name no)
@@ -11270,7 +11270,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Diode_SMD:D_1206_3216Metric"
 			(at 170.18 140.97 0)
 			(hide yes)
 			(show_name no)
@@ -11600,7 +11600,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Button_Switch_SMD:SW_Push_SPST_NO_Alps_SKRK"
 			(at 203.2 30.48 0)
 			(hide yes)
 			(show_name no)
@@ -12546,7 +12546,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 255.524 89.916 90)
 			(hide yes)
 			(show_name no)
@@ -12628,7 +12628,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 152.0952 134.62 0)
 			(hide yes)
 			(show_name no)
@@ -13101,7 +13101,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 212.344 147.574 90)
 			(hide yes)
 			(show_name no)
@@ -13262,7 +13262,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 126.0348 172.72 0)
 			(hide yes)
 			(show_name no)
@@ -13659,7 +13659,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 233.68 24.4348 0)
 			(hide yes)
 			(show_name no)
@@ -13978,7 +13978,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 233.68 19.3548 0)
 			(hide yes)
 			(show_name no)
@@ -14136,7 +14136,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 212.344 155.194 90)
 			(hide yes)
 			(show_name no)
@@ -14294,7 +14294,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "INSTA360:ME02150F3502"
 			(at 196.85 71.12 0)
 			(hide yes)
 			(show_name no)
@@ -14531,7 +14531,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Button_Switch_SMD:SW_Push_SPST_NO_Alps_SKRK"
 			(at 184.15 45.72 0)
 			(hide yes)
 			(show_name no)
@@ -14770,7 +14770,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 200.406 29.464 90)
 			(hide yes)
 			(show_name no)
@@ -14931,7 +14931,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
 			(at 273.05 147.32 0)
 			(hide yes)
 			(show_name no)
@@ -15244,7 +15244,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "INSTA360:ME02150F3502"
 			(at 180.34 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -15405,7 +15405,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 25.7048 128.27 0)
 			(hide yes)
 			(show_name no)
@@ -15485,7 +15485,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 145.034 179.324 90)
 			(hide yes)
 			(show_name no)
@@ -16685,7 +16685,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 58.7248 165.1 0)
 			(hide yes)
 			(show_name no)
@@ -16845,7 +16845,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 269.494 89.916 90)
 			(hide yes)
 			(show_name no)
@@ -16927,7 +16927,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 189.484 44.196 90)
 			(hide yes)
 			(show_name no)
