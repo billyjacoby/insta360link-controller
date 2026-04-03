@@ -21,10 +21,12 @@ ESP32-based joystick controller for Insta360 Link webcam. Controls pan/tilt/zoom
 ## Hardware
 
 - **Controller**: ESP32 development board
-- **Input**: Analog joystick (2-axis for pan/tilt)
+- **Input**: Analog joystick (2-axis pan/tilt), 10K potentiometer (zoom)
 - **Target**: Insta360 Link webcam (VID: 0x2e1a, PID: 0x4c01)
 
-**Important**: Use ADC1 pins (GPIO32-39) for joystick when WiFi is active. ADC2 pins conflict with WiFi.
+**Important**: Use ADC1 pins only for analog inputs — ADC2 conflicts with WiFi. Pin assignments differ per board:
+- ESP32-WROOM-32 (breadboard): ADC1 = GPIO32-39. Zoom pot = GPIO33.
+- ESP32-S3 (PCB): ADC1 = GPIO1-10. Zoom pot = GPIO6. Pins set via `-D` flags in `platformio.ini`.
 
 ## Toolchain
 
@@ -60,6 +62,11 @@ make
 ./linkctl-daemon --test       # Test camera control and exit
 ./linkctl-daemon --port 8080  # Custom port
 ./linkctl-daemon --no-mdns    # Disable mDNS advertisement
+
+# Service management (launchd)
+make service-install           # Install and start as launchd service (one-time)
+make restart                   # Rebuild and restart the service
+make service-uninstall         # Remove the service
 ```
 
 ## Protocol
@@ -123,14 +130,29 @@ JSON over WebSocket (text frames). ESP32 sends commands, daemon responds with st
 │   ├── commands.h/cpp           # JSON command encoding
 │   ├── serial_cli.h/cpp         # Serial CLI for configuration
 │   ├── status_led.h/cpp         # LED status patterns
-│   └── captive_portal.h/cpp     # AP mode web config
+│   ├── captive_portal.h/cpp     # AP mode web config
+│   └── zoom.h/cpp               # Zoom potentiometer (direct ADC-to-zoom mapping)
 ├── host/
 │   └── linkctl-daemon/
 │       ├── CMakeLists.txt       # Daemon build config
 │       ├── main.c               # Daemon entry point and event loop
 │       ├── camera.c/h           # libuvc camera control
 │       ├── server.c/h           # WebSocket server + JSON command dispatch
-│       └── mdns.c/h             # mDNS service advertisement
+│       ├── mdns.c/h             # mDNS service advertisement
+│       └── service.sh           # launchd service management helper
 └── docs/
     └── 2026-03-29-direct-uvc-control-design.md  # Design document
 ```
+
+## PlatformIO Gotchas
+
+- `pio` is not on PATH. Use `~/.platformio/penv/bin/pio` to run builds.
+- Clang LSP errors about `Arduino.h` not found are false positives — PlatformIO resolves these at build time.
+- Config macros from `config.h` cannot be used as default member initializers in headers — the include order isn't guaranteed. Use literals in headers, set from macros in `begin()`.
+- Serial CLI interactive commands must drain the serial buffer before waiting for Enter — leftover `\r`/`\n` from the triggering command will immediately satisfy the wait condition.
+
+## CMake Gotchas
+
+- CMake `COMMAND` does not run through a shell — `||`, `;`, `$()` won't work inline. Use a helper script for shell logic.
+- `$ENV{UID}` may not be set; use `id -u` in a shell script instead.
+- Do not run `make restart` with `sudo` — launchd services are in the user domain (`gui/<uid>`), and `sudo` changes `id -u` to 0.
