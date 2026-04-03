@@ -16,12 +16,17 @@ public:
     // Reset zoom to default (called on home button press)
     void resetToDefault();
 
+    // Disable/enable zoom input processing
+    void setDisabled(bool disabled);
+    bool isDisabled() const;
+
     // Raw ADC read for test/debug
     int readRaw();
 
 private:
     uint8_t _pin = 0;
     uint16_t _targetZoom = 0;
+    bool _disabled = false;
 };
 
 extern ZoomPot zoomPot;

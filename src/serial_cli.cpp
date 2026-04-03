@@ -218,8 +218,18 @@ void SerialCLI::processCommand(const String& line) {
         _joyCenterY = 2048;
         Serial.println("Config cleared");
     }
-    else if (cmd == "reboot") {
-        Serial.println("Rebooting...");
+    else if (cmd == "nozoom") {
+        zoomPot.setDisabled(true);
+        zoomPot.resetToDefault();
+        linkCtlClient.sendZoom(zoomPot.getTargetZoom());
+        Serial.println("Zoom disabled, reset to default");
+    }
+    else if (cmd == "zoom") {
+        zoomPot.setDisabled(false);
+        Serial.println("Zoom enabled");
+    }
+    else if (cmd == "restart") {
+        Serial.println("Restarting...");
         delay(100);
         ESP.restart();
     }
@@ -257,10 +267,12 @@ void SerialCLI::printHelp() {
     Serial.println("  calzoom                 - Test zoom potentiometer");
     Serial.println("  invertx                 - Toggle X-axis inversion");
     Serial.println("  inverty                 - Toggle Y-axis inversion");
+    Serial.println("  nozoom                  - Disable zoom and reset to default");
+    Serial.println("  zoom                    - Re-enable zoom input");
     Serial.println();
     Serial.println("=== System ===");
     Serial.println("  clear                   - Clear all saved config");
-    Serial.println("  reboot                  - Restart ESP32");
+    Serial.println("  restart                 - Restart ESP32");
     Serial.println("  help                    - Show this help");
     Serial.println();
 }
