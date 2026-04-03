@@ -39,6 +39,19 @@ void Joystick::beginButton(uint8_t btnPin) {
     _lastBtnChangeMs = millis();
 }
 
+bool Joystick::calibrate(uint16_t numSamples, uint16_t sampleIntervalMs) {
+    long sumX = 0, sumY = 0;
+    for (uint16_t i = 0; i < numSamples; i++) {
+        sumX += analogRead(_xPin);
+        sumY += analogRead(_yPin);
+        delay(sampleIntervalMs);
+    }
+    _centerX = sumX / numSamples;
+    _centerY = sumY / numSamples;
+    Serial.printf("[Joystick] Calibrated center: (%d, %d)\n", _centerX, _centerY);
+    return true;
+}
+
 bool Joystick::buttonPressed() {
     if (!_btnEnabled) return false;
 

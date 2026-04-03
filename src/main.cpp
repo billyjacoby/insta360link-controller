@@ -39,8 +39,9 @@ void setup() {
     // Apply saved joystick settings
     joystick.setInvertX(serialCli.getInvertX());
     joystick.setInvertY(serialCli.getInvertY());
-    joystick.setCenterX(serialCli.getJoyCenterX());
-    joystick.setCenterY(serialCli.getJoyCenterY());
+    statusLed.setPattern(LedPattern::BLINK_FAST);
+    joystick.calibrate();
+    statusLed.setPattern(LedPattern::BLINK_SLOW);
 
     // Initialize zoom potentiometer
     zoomPot.begin(ZOOM_POT_PIN);

@@ -28,6 +28,8 @@
 #define JOYSTICK_DEADZONE 0.1f
 #define JOYSTICK_CENTER 2048      // 12-bit ADC midpoint
 #define JOYSTICK_MAX 4095
+#define JOYSTICK_CAL_SAMPLES 32
+#define JOYSTICK_CAL_INTERVAL_MS 10
 
 // Zoom potentiometer configuration (pot position maps directly to zoom level)
 #define ZOOM_MIN 100                 // Camera minimum zoom (1x)

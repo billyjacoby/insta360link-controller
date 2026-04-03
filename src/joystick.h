@@ -22,6 +22,9 @@ public:
     PanTiltCommand toPanTilt(const JoystickReading& reading);
     void beginButton(uint8_t btnPin);
     bool buttonPressed();
+    bool calibrate(uint16_t numSamples = 32, uint16_t sampleIntervalMs = 10);
+    int getCenterX() const { return _centerX; }
+    int getCenterY() const { return _centerY; }
 
     void setDeadzone(float deadzone) { _deadzone = deadzone; }
     void setInvertX(bool invert) { _invertX = invert; }
