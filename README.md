@@ -1,6 +1,6 @@
 # Insta360 Link Joystick Controller
 
-Wireless pan/tilt/zoom control for the Insta360 Link webcam using an ESP32 and analog joystick. Controls the camera directly via USB/UVC extension units through a lightweight Mac daemon — no Insta360 desktop app required.
+Wireless pan/tilt/zoom control for the Insta360 Link webcam using an ESP32 and analog joystick. Controls the camera directly via USB/UVC extension units through a lightweight Mac daemon — no Insta360 desktop app required. This repo contains the ESP32 firmware, Mac daemon source code, and KiCad PCB design files for a custom handheld controller.
 
 ```
 [Insta360 Link] ──USB/UVC──> [linkctl-daemon (Mac)] ──WiFi/WebSocket──> [ESP32 + Joystick]
@@ -156,14 +156,21 @@ python3 host/linkctl-daemon/test_daemon.py --skip-motion
 │   ├── serial_cli.h/cpp             # Serial CLI
 │   ├── status_led.h/cpp             # LED status patterns
 │   └── captive_portal.h/cpp         # AP mode WiFi config portal
-└── host/
-    └── linkctl-daemon/
-        ├── CMakeLists.txt           # Daemon build config
-        ├── main.c                   # Entry point and event loop
-        ├── camera.c/h               # IOKit USB camera control
-        ├── server.c/h               # WebSocket server
-        ├── mdns.c/h                 # mDNS advertisement
-        └── test_daemon.py           # Integration test suite
+├── host/
+│   └── linkctl-daemon/
+│       ├── CMakeLists.txt           # Daemon build config
+│       ├── main.c                   # Entry point and event loop
+│       ├── camera.c/h               # IOKit USB camera control
+│       ├── server.c/h               # WebSocket server
+│       ├── mdns.c/h                 # mDNS advertisement
+│       └── test_daemon.py           # Integration test suite
+└── hardware/
+    ├── insta360-joystick.kicad_pro  # KiCad project
+    ├── insta360-joystick.kicad_sch  # Schematic
+    ├── insta360-joystick.kicad_pcb  # PCB layout
+    ├── specs.md                     # Hardware specs and pin assignments
+    ├── Components/                  # KiCad symbols and footprints (for parts not included in the default KiCad libraries)
+    └── Datasheets/                  # Component datasheets
 ```
 
 ## How It Works
