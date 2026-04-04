@@ -146,6 +146,7 @@ JSON over WebSocket (text frames). ESP32 sends commands, daemon responds with st
 
 ## PlatformIO Gotchas
 
+- When working in git worktrees, run `pio run` from within the worktree directory (e.g., `.worktrees/feat/foo/`), not the main repo root.
 - `pio` is not on PATH. Use `~/.platformio/penv/bin/pio` to run builds.
 - Clang LSP errors about `Arduino.h` not found are false positives — PlatformIO resolves these at build time.
 - Config macros from `config.h` cannot be used as default member initializers in headers — the include order isn't guaranteed. Use literals in headers, set from macros in `begin()`.
