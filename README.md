@@ -1,5 +1,9 @@
 # Insta360 Link Joystick Controller
 
+[![GitHub Release](https://img.shields.io/github/v/release/jfwoods/insta360link-joystick-controller)](https://github.com/jfwoods/insta360link-joystick-controller/releases/latest)
+[![CI](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/ci.yml/badge.svg)](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/ci.yml)
+[![Release](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/release.yml/badge.svg)](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/release.yml)
+
 Wireless pan/tilt/zoom control for the Insta360 Link webcam using an ESP32 and analog joystick. Controls the camera directly via USB/UVC extension units through a lightweight Mac daemon — no Insta360 desktop app required. This repo contains the ESP32 firmware, Mac daemon source code, and KiCad PCB design files for a custom handheld controller.
 
 ```
