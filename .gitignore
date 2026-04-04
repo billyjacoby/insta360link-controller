@@ -1,6 +1,6 @@
 .pio
 .vscode
-.claude/settings.local.json
+.claude
 
 # KiCad
 *.lck
