@@ -6,9 +6,16 @@
 *.lck
 *-backups/
 *-bak
+*.bak
 *.kicad_prl
 fp-info-cache
 hardware/.history/
+
+# Component library noise (import guides, non-KiCAD EDA tool files)
+hardware/Components/**/ImportGuides.html
+hardware/Components/**/ImportGuide.html
+hardware/Components/**/readme.txt
+hardware/Components/**/how-to-import.htm
 
 # Worktrees
 .worktrees/
