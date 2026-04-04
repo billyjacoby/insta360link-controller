@@ -13,11 +13,27 @@ void Joystick::begin(uint8_t xPin, uint8_t yPin) {
 
     pinMode(_xPin, INPUT);
     pinMode(_yPin, INPUT);
+
+    // Pre-fill smoothing buffers
+    for (int i = 0; i < JOYSTICK_SMOOTH_SAMPLES; i++) {
+        _xSamples[i] = analogRead(_xPin);
+        _ySamples[i] = analogRead(_yPin);
+    }
 }
 
 JoystickReading Joystick::read() {
-    int rawX = analogRead(_xPin);
-    int rawY = analogRead(_yPin);
+    // Moving average over JOYSTICK_SMOOTH_SAMPLES readings
+    _xSamples[_sampleIdx] = analogRead(_xPin);
+    _ySamples[_sampleIdx] = analogRead(_yPin);
+    _sampleIdx = (_sampleIdx + 1) % JOYSTICK_SMOOTH_SAMPLES;
+
+    int rawX = 0, rawY = 0;
+    for (int i = 0; i < JOYSTICK_SMOOTH_SAMPLES; i++) {
+        rawX += _xSamples[i];
+        rawY += _ySamples[i];
+    }
+    rawX /= JOYSTICK_SMOOTH_SAMPLES;
+    rawY /= JOYSTICK_SMOOTH_SAMPLES;
 
     float x = normalizeAxis(rawX, _centerX);
     float y = normalizeAxis(rawY, _centerY);

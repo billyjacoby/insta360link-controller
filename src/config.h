@@ -28,8 +28,10 @@
 #define JOYSTICK_DEADZONE 0.1f
 #define JOYSTICK_CENTER 2048      // 12-bit ADC midpoint
 #define JOYSTICK_MAX 4095
-#define JOYSTICK_CAL_SAMPLES 32
+#define JOYSTICK_CAL_SAMPLES 100
 #define JOYSTICK_CAL_INTERVAL_MS 10
+#define JOYSTICK_SMOOTH_SAMPLES 5
+#define JOYSTICK_CAL_DRIFT_THRESHOLD 75  // Max acceptable delta between auto-cal and saved center
 
 // Zoom potentiometer configuration (pot position maps directly to zoom level)
 #define ZOOM_MIN 100                 // Camera minimum zoom (1x)
@@ -41,7 +43,7 @@
 #define TILT_MAX_SPEED 20
 
 // Timing
-#define JOYSTICK_READ_INTERVAL_MS 50
+#define JOYSTICK_READ_INTERVAL_MS 10
 #define BUTTON_DEBOUNCE_MS 50
 #define WEBSOCKET_RECONNECT_INTERVAL_MS 5000
 #define MDNS_RETRY_INTERVAL_MS 10000

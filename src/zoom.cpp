@@ -12,7 +12,7 @@ bool ZoomPot::update() {
     if (_disabled) return false;
     int raw = analogRead(_pin);
     uint16_t zoom = map(raw, 0, 4095, ZOOM_MIN, ZOOM_MAX);
-    if (zoom == _targetZoom) return false;
+    if (abs((int)zoom - (int)_targetZoom) < 3) return false;
     _targetZoom = zoom;
     return true;
 }

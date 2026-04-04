@@ -12,6 +12,7 @@
 // Timing
 unsigned long lastJoystickRead = 0;
 unsigned long lastMdnsAttempt = 0;
+unsigned long centerGraceUntil = 0;
 bool wasWifiConnected = false;
 bool portalMode = false;
 bool mdnsStarted = false;
@@ -39,8 +40,30 @@ void setup() {
     // Apply saved joystick settings
     joystick.setInvertX(serialCli.getInvertX());
     joystick.setInvertY(serialCli.getInvertY());
+    // Always auto-calibrate (100 samples × 10ms = 1s)
     statusLed.setPattern(LedPattern::BLINK_FAST);
     joystick.calibrate();
+
+    int autoCX = joystick.getCenterX();
+    int autoCY = joystick.getCenterY();
+
+    // Cross-check against saved calibration
+    int savedCX = serialCli.getJoyCenterX();
+    int savedCY = serialCli.getJoyCenterY();
+    bool hasSaved = (savedCX != 2048 || savedCY != 2048);
+
+    if (hasSaved && abs(autoCX - savedCX) <= JOYSTICK_CAL_DRIFT_THRESHOLD &&
+                    abs(autoCY - savedCY) <= JOYSTICK_CAL_DRIFT_THRESHOLD) {
+        // Auto-cal close to saved — use saved (more stable)
+        joystick.setCenterX(savedCX);
+        joystick.setCenterY(savedCY);
+        Serial.printf("[Main] Auto-cal (%d,%d) matches saved (%d,%d) — using saved\n",
+                      autoCX, autoCY, savedCX, savedCY);
+    } else {
+        // Auto-cal diverged or no saved values — trust auto-cal and persist
+        Serial.printf("[Main] Calibrated center: (%d, %d)\n", autoCX, autoCY);
+        serialCli.setJoyCenter(autoCX, autoCY);
+    }
     statusLed.setPattern(LedPattern::BLINK_SLOW);
 
     // Initialize zoom potentiometer
@@ -162,6 +185,20 @@ void loop() {
     if (millis() - lastJoystickRead >= JOYSTICK_READ_INTERVAL_MS) {
         lastJoystickRead = millis();
 
+        // Check home button first (always responsive, even during grace)
+        if (joystick.buttonPressed()) {
+            if (linkCtlClient.isConnected()) {
+                linkCtlClient.sendCenter();
+                zoomPot.resetToDefault();
+                linkCtlClient.sendZoom(zoomPot.getTargetZoom());
+                centerGraceUntil = millis() + 500;
+                Serial.println("[Main] Home button pressed — centered + zoom reset");
+            }
+        }
+
+        // Skip joystick movement during grace period after center
+        if (millis() < centerGraceUntil) return;
+
         JoystickReading reading = joystick.read();
         PanTiltCommand cmd = joystick.toPanTilt(reading);
 
@@ -172,16 +209,6 @@ void loop() {
             // Zoom: pot position maps directly to zoom level
             if (zoomPot.update()) {
                 linkCtlClient.sendZoom(zoomPot.getTargetZoom());
-            }
-        }
-
-        // Check home button — center gimbal and reset zoom
-        if (joystick.buttonPressed()) {
-            if (linkCtlClient.isConnected()) {
-                linkCtlClient.sendCenter();
-                zoomPot.resetToDefault();
-                linkCtlClient.sendZoom(zoomPot.getTargetZoom());
-                Serial.println("[Main] Home button pressed — centered + zoom reset");
             }
         }
     }

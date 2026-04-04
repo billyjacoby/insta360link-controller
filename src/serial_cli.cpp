@@ -55,6 +55,12 @@ void SerialCLI::setServerConfig(const String& host, uint16_t port) {
     saveConfig();
 }
 
+void SerialCLI::setJoyCenter(int centerX, int centerY) {
+    _joyCenterX = centerX;
+    _joyCenterY = centerY;
+    saveConfig();
+}
+
 void SerialCLI::update() {
     while (Serial.available()) {
         char c = Serial.read();

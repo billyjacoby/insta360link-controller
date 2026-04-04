@@ -2,6 +2,7 @@
 #define JOYSTICK_H
 
 #include <Arduino.h>
+#include "config.h"
 
 struct JoystickReading {
     float x;  // -1.0 to 1.0
@@ -40,6 +41,10 @@ private:
     bool _invertY = false;
     int _centerX = 2048;
     int _centerY = 2048;
+
+    int _xSamples[JOYSTICK_SMOOTH_SAMPLES] = {};
+    int _ySamples[JOYSTICK_SMOOTH_SAMPLES] = {};
+    int _sampleIdx = 0;
 
     uint8_t _btnPin = 0;
     bool _btnEnabled = false;
