@@ -197,4 +197,6 @@ The Insta360 Link exposes pan/tilt/zoom controls as UVC extension unit registers
 
 -----
 
-**GenAI Disclaimer**: I'm a hardware guy-- I *tolerate* writing code, but I don't love it. So while the hardware design is truly my own work product, Claude Code has been to support development of the required code. All code is still reviewed by me before release. 
+**GenAI Disclaimer:**: I'm a hardware guy-- I *tolerate* writing code, but I don't love it. So while the hardware design is truly my own work product, Claude Code has been used to support firmware/software development. All code is still reviewed by me before release.
+
+**Commit Message Disclaimer:** I apologize if my commit messages are occasionally less than informative-- this is a weekend project for me, and sometimes I'm a silly goose.
