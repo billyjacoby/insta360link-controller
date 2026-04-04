@@ -16,6 +16,9 @@ jobs:
           - os: macos-14
             target: daemon-mac
             arch: arm64
+          - os: macos-14
+            target: linkctl-cli-mac
+            arch: arm64
           # - os: windows-latest
           #   target: daemon-win
           #   arch: x64
@@ -30,7 +33,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       # --- daemon-mac ---
-      - name: Install dependencies (macOS)
+      - name: Install dependencies (macOS daemon)
         if: matrix.target == 'daemon-mac'
         run: brew install libwebsockets cjson openssl@3
 
@@ -42,9 +45,9 @@ jobs:
           cmake .. -DCMAKE_BUILD_TYPE=Release
           make -j$(sysctl -n hw.ncpu)
 
-      - name: Package release (macOS)
+      - name: Package daemon release (macOS)
         if: matrix.target == 'daemon-mac'
-        id: package
+        id: package-daemon
         run: |
           STAGING="linkctl-daemon-${{ steps.version.outputs.VERSION }}-macos-${{ matrix.arch }}"
           mkdir -p "$STAGING"
@@ -55,11 +58,39 @@ jobs:
           tar czf "${STAGING}.tar.gz" "$STAGING"
           echo "ARCHIVE=${STAGING}.tar.gz" >> "$GITHUB_OUTPUT"
 
-      - name: Upload release artifact
+      - name: Upload daemon artifact
+        if: matrix.target == 'daemon-mac'
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.target }}
-          path: ${{ steps.package.outputs.ARCHIVE }}
+          path: ${{ steps.package-daemon.outputs.ARCHIVE }}
+
+      # --- linkctl CLI (macOS) — no external dependencies ---
+      - name: Build linkctl CLI (macOS)
+        if: matrix.target == 'linkctl-cli-mac'
+        working-directory: host/linkctl
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Package linkctl release (macOS)
+        if: matrix.target == 'linkctl-cli-mac'
+        id: package-cli
+        run: |
+          STAGING="linkctl-${{ steps.version.outputs.VERSION }}-macos-${{ matrix.arch }}"
+          mkdir -p "$STAGING"
+          cp host/linkctl/build/linkctl "$STAGING/"
+          cp host/linkctl/README.md "$STAGING/"
+          tar czf "${STAGING}.tar.gz" "$STAGING"
+          echo "ARCHIVE=${STAGING}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Upload linkctl artifact
+        if: matrix.target == 'linkctl-cli-mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: ${{ steps.package-cli.outputs.ARCHIVE }}
 
   create-release:
     needs: build-release

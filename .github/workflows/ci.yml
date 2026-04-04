@@ -13,6 +13,8 @@ jobs:
         include:
           - os: macos-14
             target: daemon-mac
+          - os: macos-14
+            target: linkctl-cli-mac
           # - os: windows-latest
           #   target: daemon-win
           # - os: ubuntu-latest
@@ -36,9 +38,25 @@ jobs:
           cmake ..
           make -j$(sysctl -n hw.ncpu)
 
-      - name: Upload build artifact
+      - name: Upload daemon artifact
         if: matrix.target == 'daemon-mac'
         uses: actions/upload-artifact@v4
         with:
           name: linkctl-daemon-${{ matrix.os }}
           path: host/linkctl-daemon/build/linkctl-daemon
+
+      # --- linkctl CLI (macOS) — no external dependencies ---
+      - name: Build linkctl CLI (macOS)
+        if: matrix.target == 'linkctl-cli-mac'
+        working-directory: host/linkctl
+        run: |
+          mkdir -p build && cd build
+          cmake ..
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Upload linkctl artifact
+        if: matrix.target == 'linkctl-cli-mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linkctl-${{ matrix.os }}
+          path: host/linkctl/build/linkctl
