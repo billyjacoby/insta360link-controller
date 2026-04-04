@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: daemon-mac
+            arch: arm64
+          # - os: windows-latest
+          #   target: daemon-win
+          #   arch: x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # --- daemon-mac ---
+      - name: Install dependencies (macOS)
+        if: matrix.target == 'daemon-mac'
+        run: brew install libwebsockets cjson openssl@3
+
+      - name: Build daemon (macOS)
+        if: matrix.target == 'daemon-mac'
+        working-directory: host/linkctl-daemon
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Package release (macOS)
+        if: matrix.target == 'daemon-mac'
+        id: package
+        run: |
+          STAGING="linkctl-daemon-${{ steps.version.outputs.VERSION }}-macos-${{ matrix.arch }}"
+          mkdir -p "$STAGING"
+          cp host/linkctl-daemon/build/linkctl-daemon "$STAGING/"
+          cp host/linkctl-daemon/install.sh "$STAGING/"
+          chmod +x "$STAGING/install.sh"
+          cp README.md "$STAGING/"
+          tar czf "${STAGING}.tar.gz" "$STAGING"
+          echo "ARCHIVE=${STAGING}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: ${{ steps.package.outputs.ARCHIVE }}
+
+  create-release:
+    needs: build-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.tar.gz"
+          generate_release_notes: true
