@@ -90,6 +90,11 @@ void SerialCLI::calibrateJoystick() {
 
     saveConfig();
     Serial.println("Calibration saved to flash.");
+
+    if (linkCtlClient.isConnected()) {
+        linkCtlClient.sendCenter();
+        Serial.println("Camera re-centered.");
+    }
 }
 
 void SerialCLI::processCommand(const String& line) {
