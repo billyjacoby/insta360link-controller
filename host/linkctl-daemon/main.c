@@ -1,5 +1,6 @@
 #include "camera.h"
 #include "server.h"
+#include "control.h"
 #include "mdns.h"
 
 #include <stdio.h>
@@ -8,11 +9,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <time.h>
+#include <pthread.h>
 
 #define CAMERA_POLL_INTERVAL_SEC 5
 
-static volatile bool running = true;
+static atomic_bool running = true;
 static bool use_mdns = true;
 static uint16_t port = DEFAULT_PORT;
 static bool test_mode = false;
@@ -103,6 +106,15 @@ static void poll_camera(void) {
     }
 }
 
+static void *control_thread(void *arg) {
+    (void)arg;
+    while (running) {
+        control_service();
+        usleep(5000);  // 5ms = 200Hz
+    }
+    return NULL;
+}
+
 int main(int argc, char **argv) {
     if (parse_args(argc, argv) != 0) {
         return 1;
@@ -143,9 +155,18 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Start TCP control socket for CLI (runs in its own thread)
+    if (control_init(DEFAULT_CONTROL_PORT) != 0) {
+        fprintf(stderr, "[main] Control socket failed (continuing without)\n");
+    }
+
+    // Control socket thread — decoupled from lws event loop
+    pthread_t ctrl_thread;
+    pthread_create(&ctrl_thread, NULL, control_thread, NULL);
+
     printf("[main] linkctl-daemon running on port %u\n", port);
 
-    // Main event loop
+    // Main event loop (WebSocket + camera only)
     while (running) {
         server_service(50);  // 50ms poll
         poll_camera();
@@ -153,6 +174,8 @@ int main(int argc, char **argv) {
 
     printf("\n[main] Shutting down...\n");
 
+    pthread_join(ctrl_thread, NULL);
+    control_destroy();
     if (use_mdns) mdns_unregister();
     camera_stop();
     server_destroy();
