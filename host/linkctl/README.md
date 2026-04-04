@@ -5,7 +5,7 @@ Command-line client for controlling the Insta360 Link camera via the `linkctl-da
 ## Prerequisites
 
 - `linkctl-daemon` must be running (see `host/linkctl-daemon/`)
-- Homebrew dependencies: `brew install libwebsockets cjson openssl@3`
+- No external dependencies — pure POSIX C
 
 ## Build
 
@@ -68,4 +68,4 @@ Default speeds: pan=15, tilt=10. Speed range: 3–30 (pan), 3–20 (tilt).
 
 ## How It Works
 
-`linkctl` connects to the daemon's WebSocket server at `localhost:9000`, sends JSON commands using the same protocol as the ESP32 controller, and displays the response. For one-shot commands it connects, sends, prints the result, and exits. Jog mode maintains the connection for continuous interactive control.
+`linkctl` connects to the daemon's TCP control socket at `localhost:9001` using a simple line-based text protocol. For one-shot commands it connects, sends, prints the result, and exits. Jog mode maintains the connection and uses `poll()` on both stdin and the socket for responsive keyboard-driven camera control.

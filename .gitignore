@@ -10,5 +10,8 @@
 fp-info-cache
 hardware/.history/
 
+# CMake build directories
+host/*/build/
+
 # Worktrees
 .worktrees/

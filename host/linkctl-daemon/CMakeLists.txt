@@ -24,6 +24,7 @@ add_executable(linkctl-daemon
     main.c
     camera.c
     server.c
+    control.c
     mdns.c
 )
 
