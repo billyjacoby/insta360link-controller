@@ -195,4 +195,6 @@ python3 host/linkctl-daemon/test_daemon.py --skip-motion
 
 The Insta360 Link exposes pan/tilt/zoom controls as UVC extension unit registers accessible over USB. The `linkctl-daemon` writes to these registers directly using macOS IOKit, bypassing the Insta360 desktop app entirely. The daemon runs a WebSocket server that accepts JSON commands and translates them into the appropriate UVC control transfers. The ESP32 reads the joystick, discovers the daemon via mDNS, and streams movement commands over WiFi. Or, for use without an ESP32, the `linkctl` CLI tool sends commands to the daemon. 
 
+-----
+
 **GenAI Disclaimer**: I'm a hardware guy-- I *tolerate* writing code, but I don't love it. So while the hardware design is truly my own work product, Claude Code has been to support development of the required code. All code is still reviewed by me before release. 
