@@ -142,7 +142,8 @@ void SerialCLI::processCommand(const String& line) {
     }
     else if (cmd == "stop") {
         linkCtlClient.sendStop();
-        Serial.println("Stop command sent");
+        linkCtlClient.sendCenter();
+        Serial.println("Stop command sent, gimbal centered");
     }
     else if (cmd == "center") {
         linkCtlClient.sendCenter();
