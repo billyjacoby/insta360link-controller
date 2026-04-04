@@ -10,6 +10,7 @@ ESP32-based joystick controller for Insta360 Link webcam. Controls pan/tilt/zoom
 
 ```
 [Insta360 Link] --USB/UVC--> [linkctl-daemon (C, libuvc)] --WiFi/WebSocket--> [ESP32 + Joystick]
+                                                           --TCP/9001--------> [linkctl CLI]
                                mDNS: _insta360ctrl._tcp
                                Binds all interfaces
                                No auth required
@@ -17,6 +18,7 @@ ESP32-based joystick controller for Insta360 Link webcam. Controls pan/tilt/zoom
 
 - **linkctl-daemon**: Mac-side C program that controls the camera directly via UVC extension units
 - **ESP32 firmware**: Reads joystick, discovers daemon via mDNS, sends JSON commands over WebSocket
+- **linkctl CLI**: Command-line client (pure POSIX C, zero dependencies), connects to daemon TCP socket on port 9001
 
 ## Hardware
 
@@ -69,9 +71,23 @@ make restart                   # Rebuild and restart the service
 make service-uninstall         # Remove the service
 ```
 
+### CLI Client
+
+```bash
+cd host/linkctl
+mkdir -p build && cd build
+cmake ..
+make
+
+# Optional: install system-wide
+sudo cmake --install . --prefix /usr/local
+```
+
 ## Protocol
 
-JSON over WebSocket (text frames). ESP32 sends commands, daemon responds with status.
+Two interfaces:
+- **WebSocket** (port 9000): JSON text frames for ESP32 firmware
+- **TCP** (port 9001): Newline-terminated text commands for `linkctl` CLI
 
 ### Commands (ESP32 → Daemon)
 
@@ -133,12 +149,17 @@ JSON over WebSocket (text frames). ESP32 sends commands, daemon responds with st
 │   ├── captive_portal.h/cpp     # AP mode web config
 │   └── zoom.h/cpp               # Zoom potentiometer (direct ADC-to-zoom mapping)
 ├── host/
+│   ├── linkctl/
+│   │   ├── CMakeLists.txt       # CLI build config
+│   │   └── linkctl.c            # CLI client (pure POSIX C, zero deps)
 │   └── linkctl-daemon/
 │       ├── CMakeLists.txt       # Daemon build config
 │       ├── main.c               # Daemon entry point and event loop
-│       ├── camera.c/h           # libuvc camera control
+│       ├── camera.c/h           # IOKit USB camera control
 │       ├── server.c/h           # WebSocket server + JSON command dispatch
+│       ├── control.c/h          # TCP control socket (for CLI)
 │       ├── mdns.c/h             # mDNS service advertisement
+│       ├── install.sh           # Installation script
 │       └── service.sh           # launchd service management helper
 └── docs/
     └── 2026-03-29-direct-uvc-control-design.md  # Design document
@@ -157,3 +178,10 @@ JSON over WebSocket (text frames). ESP32 sends commands, daemon responds with st
 - CMake `COMMAND` does not run through a shell — `||`, `;`, `$()` won't work inline. Use a helper script for shell logic.
 - `$ENV{UID}` may not be set; use `id -u` in a shell script instead.
 - Do not run `make restart` with `sudo` — launchd services are in the user domain (`gui/<uid>`), and `sudo` changes `id -u` to 0.
+- `make restart` in a worktree restarts the launchd service, but the plist still points to the main repo's binary path. To test worktree changes, kill the service (`launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.linkctl.daemon.plist`) and run the daemon manually from the worktree build directory.
+
+## Daemon Gotchas
+
+- **libwebsockets `lws_service()` blocks indefinitely** on macOS regardless of the timeout parameter when there are no pending events. Do not use it in any loop that needs to service other I/O. This is why the TCP control socket runs in its own thread.
+- The control thread uses a `pthread_mutex` around all `camera_*` calls to serialize access with the WebSocket thread. Any new code calling camera functions from the control path must hold `camera_mutex`.
+- After sending a `center` command, always follow with `stop` — the gimbal can drift after centering if not explicitly stopped.
