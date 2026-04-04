@@ -9,12 +9,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <time.h>
 #include <pthread.h>
 
 #define CAMERA_POLL_INTERVAL_SEC 5
 
-static volatile bool running = true;
+static atomic_bool running = true;
 static bool use_mdns = true;
 static uint16_t port = DEFAULT_PORT;
 static bool test_mode = false;

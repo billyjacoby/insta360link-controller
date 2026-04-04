@@ -62,7 +62,7 @@ linkctl <command> [args]
 | `C` | Center gimbal |
 | `Q` / ESC | Exit jog mode |
 
-Movement continues while a key is held (via terminal key repeat) and automatically stops ~150ms after release.
+Movement continues while a key is held (via terminal key repeat) and automatically stops ~400ms after release.
 
 Default speeds: pan=15, tilt=10. Speed range: 3–30 (pan), 3–20 (tilt).
 

@@ -153,6 +153,7 @@ static int cmd_center(int sock) {
     if (strncmp(resp, "ok", 2) != 0) { fprintf(stderr, "%s\n", resp); return 1; }
 
     if (send_cmd(sock, "stop\n", resp, sizeof(resp)) < 0) return 1;
+    if (strncmp(resp, "ok", 2) != 0) { fprintf(stderr, "%s\n", resp); return 1; }
 
     char cmd[32];
     snprintf(cmd, sizeof(cmd), "zoom %d\n", ZOOM_MIN);

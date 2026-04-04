@@ -220,6 +220,8 @@ static void handle_command(struct lws *wsi, const char *json, size_t len) {
             rc = camera_zoom((uint16_t)val->valueint);
         } else {
             send_json(wsi, "{\"type\":\"error\",\"message\":\"missing zoom value\"}");
+            cJSON_Delete(root);
+            return;
         }
     } else if (strcmp(cmd_str, "stop") == 0) {
         rc = camera_stop();
@@ -237,14 +239,17 @@ static void handle_command(struct lws *wsi, const char *json, size_t len) {
             free(resp_json);
         }
         cJSON_Delete(resp);
+        cJSON_Delete(root);
+        return;
     } else {
         send_json(wsi, "{\"type\":\"error\",\"message\":\"unknown command\"}");
+        cJSON_Delete(root);
+        return;
     }
 
     if (rc != 0) {
         send_json(wsi, "{\"type\":\"error\",\"message\":\"camera not connected\"}");
-    } else if (strcmp(cmd_str, "status") != 0) {
-        // Ack successful action commands (status already sends its own response)
+    } else {
         send_json(wsi, "{\"type\":\"ack\"}");
     }
 

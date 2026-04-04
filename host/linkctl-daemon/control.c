@@ -7,8 +7,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+
+/* Serializes camera access between control thread and WebSocket thread */
+static pthread_mutex_t camera_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define LINE_BUF_SIZE 256
 
@@ -32,30 +36,44 @@ static void dispatch_command(const char *line) {
     if (strncmp(line, "pan_tilt ", 9) == 0) {
         int pd, ps, td, ts;
         if (sscanf(line + 9, "%d %d %d %d", &pd, &ps, &td, &ts) == 4) {
+            pthread_mutex_lock(&camera_mutex);
             if (ps == 0 && ts == 0) {
                 rc = camera_stop();
             } else {
                 rc = camera_pan_tilt((uint8_t)pd, (uint8_t)ps,
                                      (uint8_t)td, (uint8_t)ts);
             }
+            pthread_mutex_unlock(&camera_mutex);
         } else {
             send_response("error:bad pan_tilt args\n");
             return;
         }
     } else if (strcmp(line, "stop") == 0) {
+        pthread_mutex_lock(&camera_mutex);
         rc = camera_stop();
+        pthread_mutex_unlock(&camera_mutex);
     } else if (strcmp(line, "center") == 0) {
+        pthread_mutex_lock(&camera_mutex);
         rc = camera_center();
+        pthread_mutex_unlock(&camera_mutex);
     } else if (strncmp(line, "zoom ", 5) == 0) {
         int val;
         if (sscanf(line + 5, "%d", &val) == 1) {
+            if (val < ZOOM_MIN || val > ZOOM_MAX) {
+                send_response("error:zoom out of range (100-400)\n");
+                return;
+            }
+            pthread_mutex_lock(&camera_mutex);
             rc = camera_zoom((uint16_t)val);
+            pthread_mutex_unlock(&camera_mutex);
         } else {
             send_response("error:bad zoom value\n");
             return;
         }
     } else if (strcmp(line, "status") == 0) {
+        pthread_mutex_lock(&camera_mutex);
         camera_status_t st = camera_get_status();
+        pthread_mutex_unlock(&camera_mutex);
         char resp[64];
         snprintf(resp, sizeof(resp), "status:%d %u\n", st.connected, st.zoom);
         send_response(resp);
@@ -81,7 +99,7 @@ int control_init(uint16_t port) {
     struct sockaddr_in addr = {
         .sin_family = AF_INET,
         .sin_port = htons(port),
-        .sin_addr.s_addr = htonl(INADDR_ANY),
+        .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
     };
 
     if (bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
