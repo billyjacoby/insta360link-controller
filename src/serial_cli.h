@@ -26,6 +26,7 @@ public:
     // Config setters (used by captive portal)
     void setWifiConfig(const String& ssid, const String& password);
     void setServerConfig(const String& host, uint16_t port);
+    void setJoyCenter(int centerX, int centerY);
 
     // Request portal start
     bool portalRequested() const { return _portalRequested; }
