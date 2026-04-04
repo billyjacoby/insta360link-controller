@@ -243,6 +243,9 @@ static void handle_command(struct lws *wsi, const char *json, size_t len) {
 
     if (rc != 0) {
         send_json(wsi, "{\"type\":\"error\",\"message\":\"camera not connected\"}");
+    } else if (strcmp(cmd_str, "status") != 0) {
+        // Ack successful action commands (status already sends its own response)
+        send_json(wsi, "{\"type\":\"ack\"}");
     }
 
     cJSON_Delete(root);
