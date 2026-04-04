@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "INSTA360") (type "KiCad") (uri "${KIPRJMOD}/Components/INSTA360.pretty") (options "") (descr ""))
+)
