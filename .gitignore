@@ -1,17 +1,23 @@
 .pio
 .vscode
-.claude/settings.local.json
+.claude
 
 # KiCad
 *.lck
 *-backups/
 *-bak
+*.bak
 *.kicad_prl
 fp-info-cache
 hardware/.history/
 
 # CMake build directories
 host/*/build/
+# Component library noise (import guides, non-KiCAD EDA tool files)
+hardware/Components/**/ImportGuides.html
+hardware/Components/**/ImportGuide.html
+hardware/Components/**/readme.txt
+hardware/Components/**/how-to-import.htm
 
 # Worktrees
 .worktrees/

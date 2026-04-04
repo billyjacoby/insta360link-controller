@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: daemon-mac
+          # - os: windows-latest
+          #   target: daemon-win
+          # - os: ubuntu-latest
+          #   target: firmware
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- daemon-mac ---
+      - name: Install dependencies (macOS)
+        if: matrix.target == 'daemon-mac'
+        run: brew install libwebsockets cjson openssl@3
+
+      - name: Build daemon (macOS)
+        if: matrix.target == 'daemon-mac'
+        working-directory: host/linkctl-daemon
+        run: |
+          mkdir -p build && cd build
+          cmake ..
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Upload build artifact
+        if: matrix.target == 'daemon-mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linkctl-daemon-${{ matrix.os }}
+          path: host/linkctl-daemon/build/linkctl-daemon

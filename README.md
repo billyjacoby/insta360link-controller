@@ -1,10 +1,28 @@
-# Insta360 Link Joystick Controller
+# Insta360 Link Controller
 
-Wireless pan/tilt/zoom control for the Insta360 Link webcam using an ESP32 and analog joystick. Controls the camera directly via USB/UVC extension units through a lightweight Mac daemon — no Insta360 desktop app required. This repo contains the ESP32 firmware, Mac daemon source code, and KiCad PCB design files for a custom handheld controller.
+[![GitHub Release](https://img.shields.io/github/v/release/jfwoods/insta360link-joystick-controller)](https://github.com/jfwoods/insta360link-joystick-controller/releases/latest)
+[![CI](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/ci.yml/badge.svg)](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/ci.yml)
+[![Release](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/release.yml/badge.svg)](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/release.yml)
+
+The first-party control software for the [Insta360 Link](https://www.insta360.com/product/insta360-link) is (no offense) bloated garbage, even though the hardware is pretty solid. So, I took matters into my own hands. 
+
+This implementation controls the camera directly via USB/UVC extension units through `linkctl-daemon` a lightweight daemon — no Insta360 desktop app required. Interactions with the daemon can be driven by either:
+
+1. A CLI client `linkctl` 
+2. An ESP32-based joystick controller 
+
+This repo contains the ESP32 firmware, Mac daemon and CLI source codes, and KiCad PCB design files for a custom handheld controller.
 
 ```
-[Insta360 Link] ──USB/UVC──> [linkctl-daemon (Mac)] ──WiFi/WebSocket──> [ESP32 + Joystick]
+[Insta360 Link] ──USB/UVC──> [linkctl-daemon (Mac)]
+                                                    ──WiFi/WebSocket──> [ESP32 + Joystick]
+                                                    ──CLI Client──────> [linkctl Interface]
 ```
+## Opportunities For Future Work:
+- [ ] **Windows Support**: this is on my todo list
+- [ ] **Linux Support**: this is not on my todo list currently, but PRs are welcome :)
+- [ ] **Keyframe Implementation**: as I've been using this, the ability to have orientation presets has become the *one* feature I've missed from the first-party software. This is on my todo list for after Windows support
+
 
 ## Hardware
 
@@ -85,7 +103,7 @@ Move the joystick to pan and tilt the camera. The ESP32 reads the analog input, 
 ./linkctl-daemon --test           # Test camera control and exit
 ```
 
-## Serial CLI
+## ESP32 Serial CLI
 
 Connect to the ESP32's serial port at 115200 baud. Type `help` for a full list.
 
@@ -175,4 +193,8 @@ python3 host/linkctl-daemon/test_daemon.py --skip-motion
 
 ## How It Works
 
-The Insta360 Link exposes pan/tilt/zoom controls as UVC extension unit registers accessible over USB. The `linkctl-daemon` writes to these registers directly using macOS IOKit, bypassing the Insta360 desktop app entirely. The daemon runs a WebSocket server that accepts JSON commands and translates them into the appropriate UVC control transfers. The ESP32 reads the joystick, discovers the daemon via mDNS, and streams movement commands over WiFi.
+The Insta360 Link exposes pan/tilt/zoom controls as UVC extension unit registers accessible over USB. The `linkctl-daemon` writes to these registers directly using macOS IOKit, bypassing the Insta360 desktop app entirely. The daemon runs a WebSocket server that accepts JSON commands and translates them into the appropriate UVC control transfers. The ESP32 reads the joystick, discovers the daemon via mDNS, and streams movement commands over WiFi. Or, for use without an ESP32, the `linkctl` CLI tool sends commands to the daemon. 
+
+-----
+
+**GenAI Disclaimer**: I'm a hardware guy-- I *tolerate* writing code, but I don't love it. So while the hardware design is truly my own work product, Claude Code has been to support development of the required code. All code is still reviewed by me before release. 
