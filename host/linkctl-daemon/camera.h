@@ -3,10 +3,16 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <pthread.h>
+#include "settings.h"
+
+// Hold around camera calls while the daemon's control thread is running.
+extern pthread_mutex_t camera_mutex;
 
 // Insta360 Link USB identifiers
 #define INSTA360_VID 0x2e1a
 #define INSTA360_PID 0x4c01
+#define INSTA360_LINK2_PRO_PID 0x4c06
 
 // UVC Extension Unit for Insta360 vendor controls
 #define XU_UNIT_ID 0x09
@@ -37,6 +43,14 @@ typedef struct {
 
 // Initialize the camera subsystem. Returns 0 on success.
 int camera_init(void);
+
+// Select the Link 2 Pro (PID 0x4c06) profile. Must be called before
+// camera_open(). The profile validates the advertised UVC controls using
+// read-only requests before enabling control commands.
+void camera_select_link2_pro(void);
+
+// Automatically select a single supported Link or Link 2 Pro on each reconnect.
+void camera_select_auto(void);
 
 // Attempt to find the Insta360 Link via IOKit. Returns 0 on success.
 int camera_open(void);
@@ -70,5 +84,9 @@ int camera_get_zoom(void);
 
 // Get overall camera status.
 camera_status_t camera_get_status(void);
+
+// Caller holds camera_mutex. Returned JSON belongs to the caller.
+cJSON *camera_settings_get(void);
+cJSON *camera_setting_set(const char *id, int64_t value);
 
 #endif

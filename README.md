@@ -1,29 +1,67 @@
-# Insta360 Link Controller
+# Link Control for macOS
 
-[![GitHub Release](https://img.shields.io/github/v/release/jfwoods/insta360link-joystick-controller)](https://github.com/jfwoods/insta360link-joystick-controller/releases/latest)
-[![CI](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/ci.yml/badge.svg)](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/ci.yml)
-[![Release](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/release.yml/badge.svg)](https://github.com/jfwoods/insta360link-joystick-controller/actions/workflows/release.yml)
+[![CI](https://github.com/billyjacoby/insta360link-controller/actions/workflows/ci.yml/badge.svg)](https://github.com/billyjacoby/insta360link-controller/actions/workflows/ci.yml)
 
-The first-party control software for the [Insta360 Link](https://www.insta360.com/product/insta360-link) is (no offense) bloated garbage, even though the hardware is pretty solid. So, I took matters into my own hands. 
+A native macOS controller for Insta360 Link cameras, with live preview, menu-bar
+controls, and Raycast integration. The desktop app includes its USB camera helper
+and runtime libraries; users do not need Homebrew or the official Insta360 app.
 
-This implementation controls the camera directly via USB/UVC extension units through `linkctl-daemon` a lightweight daemon — no Insta360 desktop app required. Interactions with the daemon can be driven by either:
+This fork builds on [jfwoods/insta360link-controller](https://github.com/jfwoods/insta360link-controller).
+The original CLI, ESP32 joystick firmware, and KiCad hardware designs remain included.
+This is an independent, unofficial project, not an Insta360 product.
 
-1. A CLI client `linkctl` 
-2. An ESP32-based joystick controller 
+**Status: experimental preview.** See the [release guide](docs/releasing.md),
+[known limitations](host/linkctl-gui/README.md), and [licensing status](NOTICE.md).
+Builds are currently ad-hoc signed, not notarized. Each packaged build reports its
+actual architecture and minimum macOS version; these depend on the bundled libraries.
+
+### Native macOS GUI (experimental)
+
+A SwiftUI desktop client is available in [`host/linkctl-gui`](host/linkctl-gui)
+with local video preview, automatic service management, camera movement, and
+device-discovered image settings (white balance, focus, color, and more where supported),
+plus Link 2 Pro tracking, DeskView, overhead, and whiteboard camera modes.
+The packaged app includes its camera service and runtime libraries. It starts the
+service and detects the model automatically—users do not choose an executable or
+install Homebrew. Open the app, select your camera, and start preview.
+It also provides a persistent menu-bar menu and bundled
+[Raycast Script Commands](integrations/raycast/README.md) for camera controls,
+preview, image settings, and AI modes, all using the app's existing connection.
+See the [implementation plan](docs/native-macos-gui-plan.md) for architecture and
+the Link 2 Pro compatibility milestones.
+
+**Model compatibility:** the daemon defaults to the original Link (`2e1a:4c01`).
+An experimental `--link2-pro` profile selects the Link 2 Pro (`2e1a:4c06`) and
+checks its advertised controls before use. Live preview, zoom write/readback, and a
+short pan/stop have been verified with video active on connected hardware. Start
+preview first: this camera acknowledged writes without applying them in standby.
+Tilt and center still need physical verification.
+See [hardware findings](host/linkctl-probe/FINDINGS.md). Preview availability does
+not imply that motor/vendor controls are compatible.
 
 This repo contains the ESP32 firmware, Mac daemon and CLI source codes, and KiCad PCB design files for a custom handheld controller.
 
 ```
 [Insta360 Link] ──USB/UVC──> [linkctl-daemon (Mac)]
                                                     ──WiFi/WebSocket──> [ESP32 + Joystick]
-                                                    ──CLI Client──────> [linkctl Interface]
+    ──CLI Client──────> [linkctl Interface]
 ```
-## Opportunities For Future Work:
-- [ ] **Windows Support**: this is on my todo list
-- [ ] **Linux Support**: this is not on my todo list currently, but PRs are welcome :)
-- [ ] **Keyframe Implementation**: as I've been using this, the ability to have orientation presets has become the *one* feature I've missed from the first-party software. This is on my todo list for after Windows support
+## Future work
+
+- Saved image profiles and camera position presets
+- Additional verified Link 2 Pro controls
+- Developer ID signing and notarization
+- Broader hardware and platform validation
 
 ## Setup
+
+### Desktop app (recommended)
+
+Use a packaged **Link Control.app** build: unzip it, move it to Applications, and
+open it. Start preview and allow camera access; the app handles the camera service.
+See [app instructions and source build steps](host/linkctl-gui/README.md).
+
+The standalone daemon/CLI instructions below are for advanced use and ESP32 setups.
 
 ### 1. Install the Mac daemon
 
@@ -31,7 +69,7 @@ The daemon controls the Insta360 Link over USB and exposes a WebSocket + TCP int
 
 **Option A: Download the latest release**
 
-Download `linkctl-daemon-*-macos-*.tar.gz` from the [latest release](https://github.com/jfwoods/insta360link-joystick-controller/releases/latest), then:
+When available, download `linkctl-daemon-*-macos-*.tar.gz` from this fork's [releases](https://github.com/billyjacoby/insta360link-controller/releases), then:
 
 ```bash
 tar xzf linkctl-daemon-*-macos-*.tar.gz
@@ -43,7 +81,7 @@ cd linkctl-daemon
 
 ```bash
 # Install dependencies
-brew install libwebsockets cjson openssl@3
+brew install libwebsockets cjson openssl@3 pkgconf
 
 # Build
 cd host/linkctl-daemon
@@ -61,7 +99,7 @@ The daemon finds the Insta360 Link over USB, starts a WebSocket server on port 9
 
 **Option A: Download the latest release**
 
-Download `linkctl-*-macos-*.tar.gz` from the [latest release](https://github.com/jfwoods/insta360link-joystick-controller/releases/latest), then:
+When available, download `linkctl-*-macos-*.tar.gz` from this fork's [releases](https://github.com/billyjacoby/insta360link-controller/releases), then:
 
 ```bash
 tar xzf linkctl-*-macos-*.tar.gz
@@ -143,6 +181,12 @@ No external dependencies — pure POSIX C.
 ./linkctl-daemon --port 8080      # Custom port
 ./linkctl-daemon --no-mdns        # Disable mDNS advertisement
 ./linkctl-daemon --test           # Test camera control and exit
+./linkctl-daemon --status         # Read camera status and exit, without writes
+./linkctl-daemon --link2-pro --status  # Read-only check of experimental Link 2 Pro profile
+./linkctl-daemon --link2-pro      # Run with experimental Link 2 Pro controls
+./linkctl-daemon --auto-camera   # Automatically detect Link or Link 2 Pro
+./linkctl-daemon --auto-camera --loopback --no-control --no-mdns --port 19000
+                                # Private desktop-app service (normally automatic)
 ```
 
 ## CLI Client (`linkctl`)
@@ -206,6 +250,7 @@ Connect to the ESP32's serial port at 115200 baud. Type `help` for a full list.
 The daemon exposes two interfaces:
 
 - **WebSocket** on port **9000** — for the ESP32 joystick controller (JSON over WebSocket text frames)
+- The native GUI uses the same WebSocket API with the **`arduino`** subprotocol.
 - **TCP** on port **9001** — for the `linkctl` CLI client (newline-terminated text commands)
 
 ### WebSocket Commands (ESP32 → Daemon)
@@ -222,16 +267,34 @@ The daemon exposes two interfaces:
 
 ```json
 {"type": "status", "camera_connected": true, "zoom": 150}
+{"type": "ack"}
 {"type": "error", "message": "camera not found"}
 ```
 
 Direction encoding: `1` = positive (right/up), `255` = negative (left/down), `0` = stop. Speed ranges: pan 0-30, tilt 0-20, zoom 100-400.
+
+The GUI also reads and edits supported camera image settings using `settings_get`
+and `setting_set`. Both return a device-reported `settings` snapshot; errors use
+`settings_error` so a rejected setting does not disconnect movement controls.
+See [camera settings and wire schema](docs/camera-settings.md).
+The Link 2 Pro mode interface and remaining AI feature gaps are documented in
+[AI camera controls](docs/ai-camera-controls.md).
 
 ## How It Works
 
 The Insta360 Link exposes pan/tilt/zoom controls as UVC extension unit registers accessible over USB. The `linkctl-daemon` writes to these registers directly using macOS IOKit, bypassing the Insta360 desktop app entirely. The daemon runs a WebSocket server on port 9000 that accepts JSON commands and translates them into the appropriate UVC control transfers, plus a TCP control socket on port 9001 for the `linkctl` CLI. The ESP32 reads the joystick, discovers the daemon via mDNS, and streams movement commands over WiFi. For use without an ESP32, the `linkctl` CLI connects to the daemon's TCP socket and sends commands directly from the terminal.
 
 ## Testing
+
+Status-only transport regression tests for the GUI (no camera required). The tests
+send no movement commands; the daemon performs its normal stop during shutdown.
+Stop any existing daemon first so TCP port 9001 is available:
+
+```bash
+python3 -m venv host/linkctl-daemon/build/test-env
+host/linkctl-daemon/build/test-env/bin/pip install websocket-client
+host/linkctl-daemon/build/test-env/bin/python host/linkctl-daemon/test_gui_transport.py -v
+```
 
 The daemon includes an integration test suite that exercises WebSocket communication, camera control, error handling, and multi-client support. Requires the Insta360 Link to be connected.
 

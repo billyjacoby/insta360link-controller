@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -15,6 +18,8 @@ jobs:
             target: daemon-mac
           - os: macos-14
             target: linkctl-cli-mac
+          - os: macos-14
+            target: gui-mac
           # - os: windows-latest
           #   target: daemon-win
           # - os: ubuntu-latest
@@ -28,7 +33,7 @@ jobs:
       # --- daemon-mac ---
       - name: Install dependencies (macOS)
         if: matrix.target == 'daemon-mac'
-        run: brew install libwebsockets cjson openssl@3
+        run: brew install libwebsockets cjson openssl@3 pkgconf
 
       - name: Build daemon (macOS)
         if: matrix.target == 'daemon-mac'
@@ -44,6 +49,64 @@ jobs:
         with:
           name: linkctl-daemon-${{ matrix.os }}
           path: host/linkctl-daemon/build/linkctl-daemon
+
+      - name: Test GUI transport (no camera required)
+        if: matrix.target == 'daemon-mac'
+        run: |
+          python3 -m venv host/linkctl-daemon/build/test-env
+          host/linkctl-daemon/build/test-env/bin/pip install websocket-client
+          host/linkctl-daemon/build/test-env/bin/python host/linkctl-daemon/test_gui_transport.py -v
+
+      - name: Test camera settings validation (no camera required)
+        if: matrix.target == 'daemon-mac'
+        run: |
+          ctest --test-dir host/linkctl-daemon/build --output-on-failure
+          host/linkctl-daemon/build/test-env/bin/python host/linkctl-daemon/test_settings_ws.py host/linkctl-daemon/build/test-settings-server
+
+      - name: Build read-only camera probe
+        if: matrix.target == 'daemon-mac'
+        run: sh host/linkctl-probe/build.sh
+
+      - name: Test native macOS GUI
+        if: matrix.target == 'gui-mac'
+        working-directory: host/linkctl-gui
+        run: swift test
+
+      - name: Test Raycast commands without launching the app
+        if: matrix.target == 'gui-mac'
+        run: python3 integrations/tests/test_raycast.py
+
+      - name: Build native macOS GUI
+        if: matrix.target == 'gui-mac'
+        working-directory: host/linkctl-gui
+        run: swift build -c release
+
+      - name: Install GUI packaging dependencies
+        if: matrix.target == 'gui-mac'
+        run: brew install cmake libwebsockets cjson openssl@3 pkgconf
+
+      - name: Package standalone macOS app
+        if: matrix.target == 'gui-mac'
+        run: bash host/linkctl-gui/scripts/package-app.sh
+
+      - name: Verify bundled Raycast commands
+        if: matrix.target == 'gui-mac'
+        run: LINK_CONTROL_SCRIPT_DIR="$PWD/host/linkctl-gui/dist/Link Control.app/Contents/Resources/Raycast" python3 integrations/tests/test_raycast.py
+
+      - name: Upload standalone app
+        if: matrix.target == 'gui-mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Link-Control-${{ matrix.os }}
+          path: |
+            host/linkctl-gui/dist/*.zip
+            host/linkctl-gui/dist/*.sha256
+            host/linkctl-gui/dist/*.json
+
+      - name: Verify automatic startup with packaged helper
+        if: matrix.target == 'gui-mac'
+        working-directory: host/linkctl-gui
+        run: LINKCTL_TEST_BUNDLE="$PWD/dist/Link Control.app" swift test --filter PackagedAppTests
 
       # --- linkctl CLI (macOS) — no external dependencies ---
       - name: Build linkctl CLI (macOS)

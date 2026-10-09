@@ -183,5 +183,10 @@ Two interfaces:
 ## Daemon Gotchas
 
 - **libwebsockets `lws_service()` blocks indefinitely** on macOS regardless of the timeout parameter when there are no pending events. Do not use it in any loop that needs to service other I/O. This is why the TCP control socket runs in its own thread.
-- The control thread uses a `pthread_mutex` around all `camera_*` calls to serialize access with the WebSocket thread. Any new code calling camera functions from the control path must hold `camera_mutex`.
+- The TCP, WebSocket, and reconnect-poll paths share `camera_mutex` declared in `camera.h`. Any new concurrent camera calls must hold it; startup and teardown run before/after the control thread.
+- The control thread periodically calls `server_wake()` so idle `lws_service()` returns for reconnect polling and shutdown. WebSocket replies must be queued for `LWS_CALLBACK_SERVER_WRITEABLE`.
+- Link 2 Pro support is experimental and selected with `--link2-pro`. Use `--link2-pro --status` for a read-only check; `--test` moves the camera. Hardware findings live in `host/linkctl-probe/FINDINGS.md`.
+- The desktop app bundles its helper and native libraries. It uses `--auto-camera --loopback --no-control --no-mdns` and a private WebSocket port; it does not use the standalone daemon on port 9000 or TCP port 9001.
+- Automatic IOKit discovery must query each supported VID/PID pair explicitly. A vendor-only legacy IOUSB match did not enumerate the connected Link 2 Pro on this Mac.
+- Run `bash host/linkctl-gui/scripts/package-app.sh` for a self-contained app and ZIP. Homebrew is build-time only. The bundle minimum macOS version is derived from all embedded Mach-O images; do not assume the SwiftUI source deployment target describes a locally bundled release.
 - After sending a `center` command, always follow with `stop` — the gimbal can drift after centering if not explicitly stopped.

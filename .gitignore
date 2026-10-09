@@ -1,6 +1,9 @@
 .pio
 .vscode
 .claude
+.DS_Store
+__pycache__/
+*.pyc
 
 # KiCad
 *.lck
@@ -13,6 +16,11 @@ hardware/.history/
 
 # CMake build directories
 host/*/build/
+
+# Swift Package Manager and locally packaged macOS apps
+host/*/.build/
+host/*/.swiftpm/
+host/*/dist/
 # Component library noise (import guides, non-KiCAD EDA tool files)
 hardware/Components/**/ImportGuides.html
 hardware/Components/**/ImportGuide.html

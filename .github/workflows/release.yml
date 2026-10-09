@@ -19,6 +19,12 @@ jobs:
           - os: macos-14
             target: linkctl-cli-mac
             arch: arm64
+          - os: macos-14
+            target: gui-mac
+            arch: arm64
+          - os: macos-15-intel
+            target: gui-mac
+            arch: x86_64
           # - os: windows-latest
           #   target: daemon-win
           #   arch: x64
@@ -30,12 +36,15 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Release tag must be vX.Y.Z" >&2; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
       # --- daemon-mac ---
       - name: Install dependencies (macOS daemon)
         if: matrix.target == 'daemon-mac'
-        run: brew install libwebsockets cjson openssl@3
+        run: brew install libwebsockets cjson openssl@3 pkgconf
 
       - name: Build daemon (macOS)
         if: matrix.target == 'daemon-mac'
@@ -92,6 +101,44 @@ jobs:
           name: release-${{ matrix.target }}
           path: ${{ steps.package-cli.outputs.ARCHIVE }}
 
+      - name: Install standalone app build dependencies
+        if: matrix.target == 'gui-mac'
+        run: brew install cmake libwebsockets cjson openssl@3 pkgconf
+
+      - name: Test standalone app
+        if: matrix.target == 'gui-mac'
+        working-directory: host/linkctl-gui
+        run: swift test
+
+      - name: Package standalone app
+        if: matrix.target == 'gui-mac'
+        run: |
+          ARCHIVE="Link-Control-${{ steps.version.outputs.VERSION }}-macos-${{ matrix.arch }}.zip"
+          VERSION="${{ steps.version.outputs.VERSION }}" \
+          BUILD_NUMBER="${{ github.run_number }}" \
+          ZIP_OUTPUT="$ARCHIVE" \
+          bash host/linkctl-gui/scripts/package-app.sh
+          test "$(plutil -extract CFBundleShortVersionString raw 'host/linkctl-gui/dist/Link Control.app/Contents/Info.plist')" = "${{ steps.version.outputs.VERSION }}"
+
+      - name: Test bundled Raycast commands
+        if: matrix.target == 'gui-mac'
+        run: LINK_CONTROL_SCRIPT_DIR="$PWD/host/linkctl-gui/dist/Link Control.app/Contents/Resources/Raycast" python3 integrations/tests/test_raycast.py
+
+      - name: Upload standalone app artifact
+        if: matrix.target == 'gui-mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}-${{ matrix.arch }}
+          path: |
+            Link-Control-${{ steps.version.outputs.VERSION }}-macos-${{ matrix.arch }}.zip
+            Link-Control-${{ steps.version.outputs.VERSION }}-macos-${{ matrix.arch }}.zip.sha256
+            Link-Control-${{ steps.version.outputs.VERSION }}-macos-${{ matrix.arch }}.metadata.json
+
+      - name: Verify automatic startup with packaged helper
+        if: matrix.target == 'gui-mac'
+        working-directory: host/linkctl-gui
+        run: LINKCTL_TEST_BUNDLE="$PWD/dist/Link Control.app" swift test --filter PackagedAppTests
+
   create-release:
     needs: build-release
     runs-on: ubuntu-latest
@@ -108,5 +155,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: "*.tar.gz"
+          files: |
+            *.tar.gz
+            *.zip
+            *.sha256
+            *.metadata.json
+          draft: true
           generate_release_notes: true

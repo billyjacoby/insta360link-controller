@@ -5,13 +5,18 @@ set(CMAKE_C_STANDARD 11)
 
 # Prefer Homebrew paths on macOS
 if(APPLE)
-    list(PREPEND CMAKE_PREFIX_PATH "/opt/homebrew")
-    set(ENV{PKG_CONFIG_PATH} "/opt/homebrew/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+    execute_process(COMMAND brew --prefix
+        OUTPUT_VARIABLE HOMEBREW_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    if(HOMEBREW_PREFIX)
+        list(PREPEND CMAKE_PREFIX_PATH "${HOMEBREW_PREFIX}")
+        set(ENV{PKG_CONFIG_PATH} "${HOMEBREW_PREFIX}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+    endif()
 endif()
 
 # OpenSSL (needed by libwebsockets headers)
-if(APPLE)
-    set(OPENSSL_ROOT_DIR "/opt/homebrew/opt/openssl@3")
+if(APPLE AND HOMEBREW_PREFIX)
+    set(OPENSSL_ROOT_DIR "${HOMEBREW_PREFIX}/opt/openssl@3")
 endif()
 find_package(OpenSSL REQUIRED)
 
@@ -23,6 +28,7 @@ pkg_check_modules(CJSON REQUIRED libcjson)
 add_executable(linkctl-daemon
     main.c
     camera.c
+    settings.c
     server.c
     control.c
     mdns.c
@@ -56,6 +62,33 @@ if(APPLE)
 endif()
 
 install(TARGETS linkctl-daemon DESTINATION bin)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(test-settings test_settings.c test_settings_fixture.c settings.c)
+    target_include_directories(test-settings PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_directories(test-settings PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test-settings ${CJSON_LIBRARIES})
+    target_compile_options(test-settings PRIVATE -UNDEBUG -Wall -Wextra)
+    add_test(NAME settings COMMAND test-settings)
+
+    add_executable(test-settings-server test_settings_server.c test_settings_fixture.c settings.c server.c)
+    target_include_directories(test-settings-server PRIVATE ${LWS_INCLUDE_DIRS} ${CJSON_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
+    target_link_directories(test-settings-server PRIVATE ${LWS_LIBRARY_DIRS} ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test-settings-server ${LWS_LIBRARIES} ${CJSON_LIBRARIES})
+    target_compile_options(test-settings-server PRIVATE -UNDEBUG -Wall -Wextra)
+
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_FOUND)
+        execute_process(COMMAND ${Python3_EXECUTABLE} -c "import websocket" RESULT_VARIABLE HAS_WEBSOCKET ERROR_QUIET)
+        if(HAS_WEBSOCKET EQUAL 0)
+            add_test(NAME settings-websocket COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/test_settings_ws.py $<TARGET_FILE:test-settings-server>)
+        else()
+            message(STATUS "websocket-client unavailable; settings WebSocket tests can be run manually")
+        endif()
+    endif()
+endif()
 
 # --- Service management targets (macOS launchd) ---
 

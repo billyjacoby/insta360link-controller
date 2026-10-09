@@ -11,9 +11,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-/* Serializes camera access between control thread and WebSocket thread */
-static pthread_mutex_t camera_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 #define LINE_BUF_SIZE 256
 
 static int listen_fd = -1;

@@ -7,13 +7,20 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define RESPONSE_QUEUE_SIZE 32
+#define MAX_COMMAND_SIZE 4096
+
 // Per-session data for each WebSocket client
 struct per_session_data {
     struct per_session_data *next;
     struct lws *wsi;
-    // Ring buffer for outgoing messages
-    unsigned char *pending_msg;
-    size_t pending_len;
+    unsigned char *messages[RESPONSE_QUEUE_SIZE];
+    size_t lengths[RESPONSE_QUEUE_SIZE];
+    unsigned head;
+    unsigned count;
+    char incoming[MAX_COMMAND_SIZE];
+    size_t incoming_length;
+    bool incoming_overflow;
 };
 
 static struct lws_context *ws_ctx = NULL;
@@ -33,10 +40,10 @@ static struct lws_protocols protocols[] = {
         .per_session_data_size = sizeof(struct per_session_data),
         .rx_buffer_size = 4096,
     },
-    { NULL, NULL, 0, 0 }  // Terminator
+    {0}  // Terminator
 };
 
-int server_init(uint16_t port) {
+int server_init(uint16_t port, bool loopback_only) {
     struct lws_context_creation_info info;
     memset(&info, 0, sizeof(info));
 
@@ -45,6 +52,10 @@ int server_init(uint16_t port) {
     info.gid = -1;
     info.uid = -1;
     info.options = LWS_SERVER_OPTION_VALIDATE_UTF8;
+    if (loopback_only) {
+        info.iface = "127.0.0.1";
+        info.options |= LWS_SERVER_OPTION_DISABLE_IPV6;
+    }
 
     // Suppress noisy libwebsockets logs (only show errors + warnings)
     lws_set_log_level(LLL_ERR | LLL_WARN, NULL);
@@ -62,6 +73,10 @@ int server_init(uint16_t port) {
 void server_service(int timeout_ms) {
     if (!ws_ctx) return;
     lws_service(ws_ctx, timeout_ms);
+}
+
+void server_wake(void) {
+    if (ws_ctx) lws_cancel_service(ws_ctx);
 }
 
 void server_destroy(void) {
@@ -104,8 +119,10 @@ void server_broadcast_error(const char *message) {
 static void add_client(struct per_session_data *pss, struct lws *wsi) {
     pss->wsi = wsi;
     pss->next = clients;
-    pss->pending_msg = NULL;
-    pss->pending_len = 0;
+    pss->head = 0;
+    pss->count = 0;
+    pss->incoming_length = 0;
+    pss->incoming_overflow = false;
     clients = pss;
 }
 
@@ -118,8 +135,11 @@ static void remove_client(struct per_session_data *pss) {
         }
         pp = &(*pp)->next;
     }
-    free(pss->pending_msg);
-    pss->pending_msg = NULL;
+    while (pss->count) {
+        free(pss->messages[pss->head]);
+        pss->head = (pss->head + 1) % RESPONSE_QUEUE_SIZE;
+        pss->count--;
+    }
 }
 
 static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason,
@@ -132,7 +152,9 @@ static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason,
         add_client(pss, wsi);
         // Send initial status
         {
+            pthread_mutex_lock(&camera_mutex);
             camera_status_t st = camera_get_status();
+            pthread_mutex_unlock(&camera_mutex);
             cJSON *msg = cJSON_CreateObject();
             cJSON_AddStringToObject(msg, "type", "status");
             cJSON_AddBoolToObject(msg, "camera_connected", st.connected);
@@ -152,18 +174,39 @@ static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason,
         break;
 
     case LWS_CALLBACK_RECEIVE:
-        if (in && len > 0) {
-            handle_command(wsi, (const char *)in, len);
+        // A WebSocket command may span callbacks or continuation frames. Never
+        // act on a valid JSON prefix before the entire message has arrived.
+        if (in && !pss->incoming_overflow) {
+            if (len > MAX_COMMAND_SIZE - pss->incoming_length) {
+                pss->incoming_overflow = true;
+            } else {
+                memcpy(pss->incoming + pss->incoming_length, in, len);
+                pss->incoming_length += len;
+            }
+        }
+        if (lws_is_final_fragment(wsi) && lws_remaining_packet_payload(wsi) == 0) {
+            pthread_mutex_lock(&camera_mutex);
+            if (pss->incoming_overflow)
+                send_json(wsi, "{\"type\":\"error\",\"message\":\"command too large\"}");
+            else
+                handle_command(wsi, pss->incoming, pss->incoming_length);
+            pthread_mutex_unlock(&camera_mutex);
+            pss->incoming_length = 0;
+            pss->incoming_overflow = false;
         }
         break;
 
     case LWS_CALLBACK_SERVER_WRITEABLE:
-        if (pss->pending_msg && pss->pending_len > 0) {
-            lws_write(wsi, pss->pending_msg + LWS_PRE,
-                      pss->pending_len, LWS_WRITE_TEXT);
-            free(pss->pending_msg);
-            pss->pending_msg = NULL;
-            pss->pending_len = 0;
+        if (pss->count) {
+            unsigned index = pss->head;
+            size_t length = pss->lengths[index];
+            int written = lws_write(wsi, pss->messages[index] + LWS_PRE,
+                                    length, LWS_WRITE_TEXT);
+            free(pss->messages[index]);
+            pss->head = (index + 1) % RESPONSE_QUEUE_SIZE;
+            pss->count--;
+            if (written < 0 || (size_t)written != length) return -1;
+            if (pss->count) lws_callback_on_writable(wsi);
         }
         break;
 
@@ -181,14 +224,31 @@ static void handle_command(struct lws *wsi, const char *json, size_t len) {
     memcpy(buf, json, len);
     buf[len] = '\0';
 
-    cJSON *root = cJSON_Parse(buf);
-    free(buf);
+    const char *end = NULL;
+    cJSON *root = cJSON_ParseWithLengthOpts(buf, len + 1, &end, false);
     if (!root) {
+        free(buf);
         send_json(wsi, "{\"type\":\"error\",\"message\":\"invalid JSON\"}");
         return;
     }
 
-    cJSON *cmd = cJSON_GetObjectItem(root, "cmd");
+    cJSON *cmd = cJSON_GetObjectItemCaseSensitive(root, "cmd");
+    bool settings_command = cJSON_IsString(cmd) &&
+        (strcmp(cmd->valuestring, "settings_get") == 0 || strcmp(cmd->valuestring, "setting_set") == 0);
+    while (end < buf + len && (*end == ' ' || *end == '\t' || *end == '\r' || *end == '\n')) ++end;
+    // cJSON accepts trailing input and decodes embedded NULs into truncated C
+    // strings. Neither may turn a malformed setting ID/value into a USB write.
+    bool invalid = !cJSON_IsObject(root) || end != buf + len || memchr(buf, '\0', len) ||
+        (settings_command && strstr(buf, "\\u0000"));
+    free(buf);
+    if (invalid) {
+        send_json(wsi, settings_command ?
+            "{\"type\":\"settings_error\",\"message\":\"invalid settings JSON\"}" :
+            "{\"type\":\"error\",\"message\":\"invalid JSON\"}");
+        cJSON_Delete(root);
+        return;
+    }
+
     if (!cJSON_IsString(cmd)) {
         send_json(wsi, "{\"type\":\"error\",\"message\":\"missing cmd field\"}");
         cJSON_Delete(root);
@@ -198,7 +258,26 @@ static void handle_command(struct lws *wsi, const char *json, size_t len) {
     const char *cmd_str = cmd->valuestring;
     int rc = 0;
 
-    if (strcmp(cmd_str, "pan_tilt") == 0) {
+    if (strcmp(cmd_str, "settings_get") == 0 || strcmp(cmd_str, "setting_set") == 0) {
+        cJSON *response;
+        if (strcmp(cmd_str, "settings_get") == 0) {
+            response = camera_settings_get();
+        } else {
+            const char *id;
+            int64_t value;
+            response = settings_parse_set(root, &id, &value) ?
+                camera_setting_set(id, value) :
+                settings_error("setting_set requires an ID and an integer value");
+        }
+        char *response_json = cJSON_PrintUnformatted(response);
+        if (response_json) {
+            send_json(wsi, response_json);
+            free(response_json);
+        }
+        cJSON_Delete(response);
+        cJSON_Delete(root);
+        return;
+    } else if (strcmp(cmd_str, "pan_tilt") == 0) {
         int pan_dir = 0, pan_speed = 0, tilt_dir = 0, tilt_speed = 0;
         cJSON *item;
         if ((item = cJSON_GetObjectItem(root, "pan_dir")))   pan_dir = item->valueint;
@@ -257,27 +336,30 @@ static void handle_command(struct lws *wsi, const char *json, size_t len) {
 }
 
 static void send_json(struct lws *wsi, const char *json) {
+    struct per_session_data *pss = lws_wsi_user(wsi);
+    if (!pss) return;
+    if (pss->count == RESPONSE_QUEUE_SIZE) {
+        lws_set_timeout(wsi, PENDING_TIMEOUT_CLOSE_SEND, LWS_TO_KILL_ASYNC);
+        return;
+    }
     size_t len = strlen(json);
     // libwebsockets requires LWS_PRE bytes of padding before the data
     unsigned char *buf = malloc(LWS_PRE + len);
-    if (!buf) return;
+    if (!buf) {
+        lws_set_timeout(wsi, PENDING_TIMEOUT_CLOSE_SEND, LWS_TO_KILL_ASYNC);
+        return;
+    }
 
     memcpy(buf + LWS_PRE, json, len);
-    lws_write(wsi, buf + LWS_PRE, len, LWS_WRITE_TEXT);
-    free(buf);
+    unsigned index = (pss->head + pss->count) % RESPONSE_QUEUE_SIZE;
+    pss->messages[index] = buf;
+    pss->lengths[index] = len;
+    pss->count++;
+    lws_callback_on_writable(wsi);
 }
 
 static void broadcast_json(const char *json) {
-    size_t len = strlen(json);
-
     for (struct per_session_data *pss = clients; pss; pss = pss->next) {
-        // Queue the message and request a writeable callback
-        free(pss->pending_msg);
-        pss->pending_msg = malloc(LWS_PRE + len);
-        if (pss->pending_msg) {
-            memcpy(pss->pending_msg + LWS_PRE, json, len);
-            pss->pending_len = len;
-            lws_callback_on_writable(pss->wsi);
-        }
+        send_json(pss->wsi, json);
     }
 }
