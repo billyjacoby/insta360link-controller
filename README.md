@@ -15,7 +15,7 @@ This is an independent, unofficial project, not an Insta360 product.
 Builds are currently ad-hoc signed, not notarized. Each packaged build reports its
 actual architecture and minimum macOS version; these depend on the bundled libraries.
 
-### Native macOS GUI (experimental)
+## Native macOS app
 
 A SwiftUI desktop client is available in [`host/linkctl-gui`](host/linkctl-gui)
 with local video preview, automatic service management, camera movement, and
@@ -27,25 +27,48 @@ install Homebrew. Open the app, select your camera, and start preview.
 It also provides a persistent menu-bar menu and bundled
 [Raycast Script Commands](integrations/raycast/README.md) for camera controls,
 preview, image settings, and AI modes, all using the app's existing connection.
-See the [implementation plan](docs/native-macos-gui-plan.md) for architecture and
-the Link 2 Pro compatibility milestones.
+### Included controls
 
-**Model compatibility:** the daemon defaults to the original Link (`2e1a:4c01`).
-An experimental `--link2-pro` profile selects the Link 2 Pro (`2e1a:4c06`) and
-checks its advertised controls before use. Live preview, zoom write/readback, and a
+| Feature | Desktop app |
+| --- | --- |
+| Live camera preview | Explicit start/stop; stays fixed above scrolling settings |
+| Movement | Bounded pan/tilt jogs, adjustable speed, center, manual stop |
+| Zoom | 100–400% |
+| Image settings | Device-discovered color, focus, and white balance controls |
+| Link 2 Pro modes | Normal, tracking, DeskView, overhead, automatic whiteboard |
+| Menu bar | Common controls, preview, status, and dashboard reopening |
+| Raycast | 13 bundled Script Commands; no separate daemon required |
+
+Available image controls depend on the camera. Tracking speed/framing, gesture
+configuration, proprietary exposure/ISO, and HDR are not implemented.
+See the [documentation index](docs/README.md) for usage, protocols, and release steps.
+
+**Model compatibility:** the GUI automatically detects the original Link
+(`2e1a:4c01`) or Link 2 Pro (`2e1a:4c06`) and checks advertised controls before use.
+The standalone daemon defaults to the original Link; use `--auto-camera` or
+`--link2-pro` for the Pro. Live preview, zoom write/readback, and a
 short pan/stop have been verified with video active on connected hardware. Start
 preview first: this camera acknowledged writes without applying them in standby.
 Tilt and center still need physical verification.
 See [hardware findings](host/linkctl-probe/FINDINGS.md). Preview availability does
 not imply that motor/vendor controls are compatible.
 
-This repo contains the ESP32 firmware, Mac daemon and CLI source codes, and KiCad PCB design files for a custom handheld controller.
+## Architecture
 
+```text
+Raycast / menu bar / SwiftUI dashboard
+                  │
+                  ▼
+        App-owned bundled helper ──USB/UVC──> Insta360 Link camera
+        (private loopback WebSocket)
+
+Advanced / joystick setup (separate from desktop app):
+ESP32 ──WebSocket──> standalone daemon ──USB/UVC──> camera
+CLI   ──TCP───────> standalone daemon
 ```
-[Insta360 Link] ──USB/UVC──> [linkctl-daemon (Mac)]
-                                                    ──WiFi/WebSocket──> [ESP32 + Joystick]
-    ──CLI Client──────> [linkctl Interface]
-```
+The GUI does not depend on a manually installed daemon or the legacy TCP port.
+Do not run both control services against the same camera.
+
 ## Future work
 
 - Saved image profiles and camera position presets
@@ -57,11 +80,48 @@ This repo contains the ESP32 firmware, Mac daemon and CLI source codes, and KiCa
 
 ### Desktop app (recommended)
 
-Use a packaged **Link Control.app** build: unzip it, move it to Applications, and
-open it. Start preview and allow camera access; the app handles the camera service.
-See [app instructions and source build steps](host/linkctl-gui/README.md).
+### Install a packaged build
+
+When a GUI build is available from this fork's
+[releases](https://github.com/billyjacoby/insta360link-controller/releases) or
+[successful CI artifacts](https://github.com/billyjacoby/insta360link-controller/actions/workflows/ci.yml):
+
+1. Choose the package matching your Mac's architecture and check its minimum OS.
+2. Unzip it and move **Link Control.app** to `/Applications`.
+3. Open the app and wait for **Camera ready**.
+4. Click **Start Preview** and allow camera access, then use the controls.
+
+Keep a video stream active for Link 2 Pro controls. Closing the dashboard leaves
+the app in the menu bar; choose **Quit Link Control** to stop its helper.
+Current packages are ad-hoc signed, not notarized.
+
+### Build and install locally
+
+With Xcode command-line tools and Homebrew installed, run from the repository root:
+
+```sh
+brew install cmake libwebsockets cjson openssl@3 pkgconf
+bash host/linkctl-gui/scripts/package-app.sh
+bash host/linkctl-gui/scripts/install-local.sh
+open '/Applications/Link Control.app'
+```
+
+Quit an existing instance before installation. The installer preserves an existing
+app as a backup. Homebrew is needed only at build time.
+
+### Connect Raycast
+
+From the app's menu-bar menu, choose **Open Raycast Scripts Folder**. Add that
+folder in **Raycast Settings → Extensions → + → Add Script Directory**; the app
+copies its path for the folder picker. See the [Raycast guide](integrations/raycast/README.md)
+for commands and hotkey setup.
+
+See [full app instructions](host/linkctl-gui/README.md) and the
+[local validation and release checklist](docs/releasing.md).
 
 The standalone daemon/CLI instructions below are for advanced use and ESP32 setups.
+
+## Standalone daemon, CLI, and joystick setup
 
 ### 1. Install the Mac daemon
 

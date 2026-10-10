@@ -1,9 +1,20 @@
 # Link Control for macOS
 
 A native camera dashboard with live preview, pan/tilt jogs, center, zoom, image
-settings, and connection status. The app includes and manages its camera service automatically.
+settings, supported Link 2 Pro modes, and connection status. The app includes and
+manages its camera service automatically, with persistent menu-bar controls and
+bundled Raycast commands.
+
+See the [documentation index](../../docs/README.md) for protocol references and
+the [release guide](../../docs/releasing.md) for local installation and validation.
 
 ## Using the app
+
+Packaged GUI builds, when available, are listed in this fork's
+[releases](https://github.com/billyjacoby/insta360link-controller/releases) or
+[CI artifacts](https://github.com/billyjacoby/insta360link-controller/actions/workflows/ci.yml).
+Choose a package matching your architecture and its reported minimum macOS version.
+Current builds are ad-hoc signed, not notarized.
 
 1. Unzip the packaged app and move **Link Control.app** to Applications.
 2. Open **Link Control** and connect your Insta360 Link or Link 2 Pro.
