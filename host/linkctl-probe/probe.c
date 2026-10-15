@@ -15,7 +15,8 @@ static unsigned query_failures;
 static bool ai_current;
 
 /* Candidate addresses from published Link-family maps, with lengths observed
- * on Link 2 Pro. Reading them does not establish their Pro-specific semantics. */
+ * on Link 2 Pro. Reading them does not establish physical behavior. Gesture
+ * selectors 05/1b also have official SDK wire evidence; see ai-camera-controls.md. */
 static uint16_t ai_candidate_size(uint8_t unit, uint8_t selector) {
     if (unit == 11 && selector >= 1 && selector <= 5) return 1;
     if (unit != 9) return 0;
@@ -25,6 +26,7 @@ static uint16_t ai_candidate_size(uint8_t unit, uint8_t selector) {
     case 0x06: return 5;
     case 0x15: return 16;
     case 0x18: return 4;
+    case 0x1b: return 2;
     default: return 0;
     }
 }

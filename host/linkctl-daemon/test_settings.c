@@ -355,7 +355,8 @@ static void mode_descriptor_gates(void) {
         assert(settings_discover_for_device(&f.settings, f.descriptors, f.descriptor_length,
                                            identities[i][0], identities[i][1]) == 0);
         cJSON *result = settings_snapshot(&f.settings);
-        assert(!control(result, "ai_mode") && !control(result, "ai_tracking"));
+        assert(!control(result, "ai_mode") && !control(result, "ai_tracking") &&
+               !control(result, "gesture_control") && !control(result, "gesture_palm"));
         assert(control(result, "brightness"));
         assert(f.mode_reads == 0);
         cJSON_Delete(result);
@@ -397,6 +398,116 @@ static void mode_descriptor_gates(void) {
     cJSON_Delete(result);
 }
 
+static void gesture_controls(void) {
+    fake_camera_t f;
+    fake_camera_init_modes(&f);
+    cJSON *result = settings_snapshot(&f.settings);
+    const char *ids[] = {"gesture_control", "gesture_palm", "gesture_zoom", "gesture_whiteboard"};
+    for (unsigned i = 0; i < sizeof(ids) / sizeof(ids[0]); ++i) {
+        cJSON *gesture = control(result, ids[i]);
+        assert(gesture && strcmp(cJSON_GetObjectItem(gesture, "group")->valuestring, "gestures") == 0);
+        assert(strcmp(cJSON_GetObjectItem(gesture, "kind")->valuestring, "boolean") == 0);
+    }
+    cJSON_Delete(result);
+    rejected(&f, "gesture_palm", -1);
+    rejected(&f, "gesture_palm", 2);
+
+    uint8_t master_before[2];
+    memcpy(master_before, f.gesture_payload, sizeof(master_before));
+    result = settings_set(&f.settings, "gesture_control", 1);
+    type(result, "settings");
+    assert(f.last_selector == 0x1b && f.last_width == 2);
+    assert(f.last_data[0] == (uint8_t)(master_before[0] | 0x10));
+    assert(f.last_data[1] == master_before[1]);
+    cJSON_Delete(result);
+
+    uint8_t feature_before = f.gesture_flags;
+    result = settings_set(&f.settings, "gesture_zoom", 1);
+    type(result, "settings");
+    assert(f.last_selector == 5 && f.last_width == 1);
+    assert(f.last_data[0] == (uint8_t)(feature_before | 0x04));
+    cJSON_Delete(result);
+
+    // The user's primary case: master OFF preserves all other feature bits
+    // and leaves the independent per-gesture register untouched.
+    uint8_t flags_before = f.gesture_flags;
+    result = settings_set(&f.settings, "gesture_control", 0);
+    type(result, "settings");
+    assert(f.last_selector == 0x1b && f.last_width == 2);
+    assert(f.last_data[0] == (uint8_t)(master_before[0] & ~0x10));
+    assert(f.last_data[1] == master_before[1] && f.gesture_flags == flags_before);
+    cJSON_Delete(result);
+    for (unsigned i = 1; i < 4; ++i) {
+        unsigned mask = 1u << i;
+        result = settings_set(&f.settings, ids[i], 1);
+        type(result, "settings");
+        assert(f.gesture_flags == (uint8_t)(flags_before | mask));
+        cJSON_Delete(result);
+        result = settings_set(&f.settings, ids[i], 0);
+        type(result, "settings");
+        flags_before &= (uint8_t)~mask;
+        assert(f.gesture_flags == flags_before);
+        assert(f.gesture_payload[0] == (uint8_t)(master_before[0] & ~0x10));
+        assert(f.gesture_payload[1] == master_before[1]);
+        cJSON_Delete(result);
+    }
+
+    fake_control(&f, 9, 5)->info = 1;
+    rejected(&f, "gesture_palm", 1);
+    fake_control(&f, 9, 5)->info = 3;
+    f.gesture_length = 2;
+    rejected(&f, "gesture_palm", 1);
+    f.gesture_length = 1;
+    fake_control(&f, 9, 5)->fail_request = 0x81;
+    rejected(&f, "gesture_palm", 1);
+    fake_control(&f, 9, 5)->fail_request = 0;
+    // Simulate a camera accepting SET_CUR but leaving the requested bit unchanged.
+    uint8_t held = f.gesture_flags;
+    f.ignore_gesture_write = true;
+    unsigned writes = f.writes;
+    result = settings_set(&f.settings, "gesture_palm", 1);
+    type(result, "settings_error");
+    assert(f.writes == writes + 1);
+    cJSON_Delete(result);
+    assert(f.gesture_flags == held);
+    f.ignore_gesture_write = false;
+
+    f.gesture_master_length = 1;
+    rejected(&f, "gesture_control", 0);
+    f.gesture_master_length = 2;
+    const uint8_t unsafe_info[] = {0, 1, 2, 7, 0x0b, 0x13, 0x23};
+    for (unsigned i = 0; i < sizeof(unsafe_info); ++i) {
+        fake_control(&f, 9, 0x1b)->info = unsafe_info[i];
+        rejected(&f, "gesture_control", 0);
+    }
+    fake_control(&f, 9, 0x1b)->info = 3;
+    fake_control(&f, 9, 0x1b)->fail_request = 0x86;
+    rejected(&f, "gesture_control", 0);
+    fake_control(&f, 9, 0x1b)->fail_request = 0;
+    f.fail_readback = true;
+    result = settings_set(&f.settings, "gesture_control", 1);
+    type(result, "settings_error");
+    cJSON_Delete(result);
+
+    // Selector advertisement gates each setting independently.
+    fake_camera_init_modes(&f);
+    uint8_t *xu = f.descriptors + f.descriptor_length - 29;
+    xu[27] &= (uint8_t)~0x04; // Selector 0x1b, bit 26.
+    assert(settings_discover_for_device(&f.settings, f.descriptors, f.descriptor_length,
+                                        0x2e1a, 0x4c06) == 0);
+    result = settings_snapshot(&f.settings);
+    assert(control(result, "ai_mode") && !control(result, "gesture_control"));
+    assert(control(result, "gesture_palm"));
+    cJSON_Delete(result);
+    xu[24] &= (uint8_t)~0x10; // Selector 5, bit 4.
+    assert(settings_discover_for_device(&f.settings, f.descriptors, f.descriptor_length,
+                                        0x2e1a, 0x4c06) == 0);
+    result = settings_snapshot(&f.settings);
+    assert(!control(result, "gesture_palm") && !control(result, "gesture_zoom") &&
+           !control(result, "gesture_whiteboard"));
+    cJSON_Delete(result);
+}
+
 int main(void) {
     discovery_and_signed_values();
     auto_dependencies_and_exposure();
@@ -406,6 +517,7 @@ int main(void) {
     mode_pending_and_authoritative_readback();
     mode_failures_stay_local();
     mode_descriptor_gates();
+    gesture_controls();
     puts("settings tests passed (fake USB only)");
     return 0;
 }

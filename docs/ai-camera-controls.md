@@ -8,7 +8,9 @@ algorithm runs on the device; the app is a controller for that algorithm.
 Insta360's Link 2 Pro product documentation describes single-person/group
 tracking, tracking/pause areas, DeskView, gesture shortcuts, and whiteboard modes.
 Feature availability in the official application is not a specification for USB
-commands. Its SDK documentation does not list Link 2 Pro or a macOS Link control API.
+commands. The SDK overview is not a complete compatibility specification; the
+published Link SDK does include macOS binaries and explicitly accepts the Pro PID
+(see the gesture protocol evidence below).
 
 The official software also offers a Smart Whiteboard Virtual Camera path. That
 is distinct from the hardware whiteboard detection/perspective-correction mode
@@ -69,8 +71,8 @@ fabricated factory default. Normal is the way to disable the special mode.
   XU9 selector `0x13` values and observed no framing effect despite matching readback.
 - Single/group or selected-person targeting: the legacy candidate at XU10 selector
   `0x01` is read-only on the Pro; its byte 4 is a counter, not a target setting.
-- Gesture enable/bindings: readable candidate registers exist, but the Pro-specific
-  bit/action mappings have not been established.
+- Gesture bindings: the SDK documents binding commands, but Pro-specific behavior
+  has not been established; binding writes are not exposed.
 - Tracking/pause-area configuration.
 
 These do not have working controls in the UI. Completing them requires Pro-specific
@@ -82,6 +84,56 @@ Manual whiteboard corner selection is documented by the external source, but thi
 implementation uses the camera's automatic detection. A future corner editor must
 send normalized TL/BL/BR/TR points together with the active stream aspect ratio;
 hard-coding 16:9 is not correct for every supported stream.
+
+## Gesture switch protocol
+
+Static inspection of the official [Insta360 Link SDK](https://github.com/Insta360Develop/Link-SDK/tree/2dd2c78186b0335a530042ae49accbef249d6a95)
+establishes enable/disable commands. Unlike a legacy-model guess, this SDK's macOS
+discovery explicitly accepts VID `2e1a`, PID `4c06` and routes it through the same
+controller. The implementation is restricted to this Pro model and the matching
+XU9 GUID above, advertised selector, capability, and exact length.
+
+| Setting ID | XU9 selector | Length | Bit |
+| --- | --- | --- | --- |
+| `gesture_control` | `1b` | 2 bytes, little-endian | 4 (`0010`) |
+| `gesture_palm` | `05` | 1 byte | 1 (`02`) |
+| `gesture_zoom` (L) | `05` | 1 byte | 2 (`04`) |
+| `gesture_whiteboard` (V) | `05` | 1 byte | 3 (`08`) |
+
+Every write reads the full current register, changes only the requested bit, and
+checks readback. The master switch and individual preferences are independent;
+turning the master off does not clear the individual settings. No binding or other
+feature bits are changed. A switch does not exit a mode already in progress.
+
+Reproducible static evidence at that commit:
+
+- macOS dylib Git blob `c4b760813f2eb8ed089be5709ef1cc8ce51c71cd`, ARM64 slice:
+  `EnableAllGesture` at `0xbc64` passes feature index 4 to
+  `EnableExtendFuncWork` at `0xd238`, which reads/modifies/writes selector `1b` as
+  a 16-bit mask. `EnableGestureWork` at `0xbc78` and `GetGestureStatus` at
+  `0xbfcc` use selector `05`, with gesture enum values as bit indices.
+- Linux SDK blob `9aa109f72f374fc4c0860b34053d6317b0b49130` independently uses the
+  same mapping. Public headers define Palm=1, L=2, V=3 and distinguish the master
+  switch from per-gesture enable state.
+- Local read-only descriptors report GET/SET and lengths 2 and 1 respectively.
+  Selector `05` returned `0e`, consistent with Palm/L/V individually enabled.
+  The existing probe did not read selector `1b`'s current value.
+
+A follow-up read-only `linkctl-probe --ai` on October 15, 2026 returned XU9
+`05`: INFO=`03`, LEN=`1`, CUR=`0e`; and `1b`: INFO=`03`, LEN=`2`, CUR=`d4 09`.
+The SDK mapping interprets these as master enabled and Palm/L/V individually
+enabled. This check made no writes and does not establish behavioral correctness.
+The packaged helper's read-only `--auto-camera --settings` diagnostic also returned
+all four gesture controls as readable/writable Boolean `1`, with no defaults or
+per-control errors. The Swift tests cover decoding and failed-write state handling;
+fake-USB tests cover masked writes, capability gates, and readback failures.
+
+This establishes the SDK wire mapping, **not physical gesture verification** on
+the connected firmware. Test with video active: switch the master off, confirm
+readback, and verify palm/L/V no longer trigger actions; then test the individual
+switches with the master on. Check reconnect and power-cycle behavior separately.
+Do not infer persistence from USB readback. Gesture bindings may have been changed
+by other software; these switches do not assign actions.
 
 ## Read-only hardware evidence
 

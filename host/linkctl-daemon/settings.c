@@ -5,33 +5,37 @@
 
 enum { SET_CUR = 0x01, GET_CUR = 0x81, GET_MIN, GET_MAX, GET_RES,
        GET_LEN, GET_INFO, GET_DEF };
-enum { INTEGER, BOOLEAN, POWER_LINE, EXPOSURE_MODE, AI_MODE };
+enum { INTEGER, BOOLEAN, POWER_LINE, EXPOSURE_MODE, AI_MODE, GESTURE };
 
 typedef struct {
     const char *id, *label, *group, *unit;
-    uint8_t subtype, bit, selector, width, kind;
+    uint8_t subtype, bit, selector, width, kind, value_bit;
     bool signed_value;
 } definition_t;
 
 // Vendor controls must additionally pass the model and descriptor gates below.
 static const definition_t definitions[] = {
-    {"brightness", "Brightness", "image", "", 5, 0, 2, 2, INTEGER, true},
-    {"contrast", "Contrast", "image", "", 5, 1, 3, 2, INTEGER, false},
-    {"hue", "Hue", "image", "degrees", 5, 2, 6, 2, INTEGER, true},
-    {"saturation", "Saturation", "image", "", 5, 3, 7, 2, INTEGER, false},
-    {"sharpness", "Sharpness", "image", "", 5, 4, 8, 2, INTEGER, false},
-    {"gamma", "Gamma", "image", "", 5, 5, 9, 2, INTEGER, false},
-    {"gain", "Gain", "image", "", 5, 9, 4, 2, INTEGER, false},
-    {"backlight_compensation", "Backlight compensation", "image", "", 5, 8, 1, 2, INTEGER, false},
-    {"power_line_frequency", "Power line frequency", "image", "", 5, 10, 5, 1, POWER_LINE, false},
-    {"white_balance_temperature", "White balance temperature", "white_balance", "K", 5, 6, 10, 2, INTEGER, false},
-    {"white_balance_auto", "Automatic white balance", "white_balance", "", 5, 12, 11, 1, BOOLEAN, false},
-    {"focus_absolute", "Focus", "focus", "", 2, 5, 6, 2, INTEGER, false},
-    {"focus_auto", "Autofocus", "focus", "", 2, 17, 8, 1, BOOLEAN, false},
-    {"exposure_mode", "Exposure mode", "exposure", "", 2, 1, 2, 1, EXPOSURE_MODE, false},
-    {"exposure_absolute", "Exposure time", "exposure", "100 us", 2, 3, 4, 4, INTEGER, false},
-    {"exposure_auto_priority", "Variable frame rate", "exposure", "", 2, 2, 3, 1, BOOLEAN, false},
-    {"ai_mode", "AI mode", "ai", "", 6, 1, 2, SETTINGS_MODE_LENGTH, AI_MODE, false},
+    {"brightness", "Brightness", "image", "", 5, 0, 2, 2, INTEGER, 0, true},
+    {"contrast", "Contrast", "image", "", 5, 1, 3, 2, INTEGER, 0, false},
+    {"hue", "Hue", "image", "degrees", 5, 2, 6, 2, INTEGER, 0, true},
+    {"saturation", "Saturation", "image", "", 5, 3, 7, 2, INTEGER, 0, false},
+    {"sharpness", "Sharpness", "image", "", 5, 4, 8, 2, INTEGER, 0, false},
+    {"gamma", "Gamma", "image", "", 5, 5, 9, 2, INTEGER, 0, false},
+    {"gain", "Gain", "image", "", 5, 9, 4, 2, INTEGER, 0, false},
+    {"backlight_compensation", "Backlight compensation", "image", "", 5, 8, 1, 2, INTEGER, 0, false},
+    {"power_line_frequency", "Power line frequency", "image", "", 5, 10, 5, 1, POWER_LINE, 0, false},
+    {"white_balance_temperature", "White balance temperature", "white_balance", "K", 5, 6, 10, 2, INTEGER, 0, false},
+    {"white_balance_auto", "Automatic white balance", "white_balance", "", 5, 12, 11, 1, BOOLEAN, 0, false},
+    {"focus_absolute", "Focus", "focus", "", 2, 5, 6, 2, INTEGER, 0, false},
+    {"focus_auto", "Autofocus", "focus", "", 2, 17, 8, 1, BOOLEAN, 0, false},
+    {"exposure_mode", "Exposure mode", "exposure", "", 2, 1, 2, 1, EXPOSURE_MODE, 0, false},
+    {"exposure_absolute", "Exposure time", "exposure", "100 us", 2, 3, 4, 4, INTEGER, 0, false},
+    {"exposure_auto_priority", "Variable frame rate", "exposure", "", 2, 2, 3, 1, BOOLEAN, 0, false},
+    {"ai_mode", "AI mode", "ai", "", 6, 1, 2, SETTINGS_MODE_LENGTH, AI_MODE, 0, false},
+    {"gesture_control", "Enable gesture control", "gestures", "", 6, 26, 0x1b, 2, GESTURE, 4, false},
+    {"gesture_palm", "Palm gesture", "gestures", "", 6, 4, 5, 1, GESTURE, 1, false},
+    {"gesture_zoom", "Zoom gesture", "gestures", "", 6, 4, 5, 1, GESTURE, 2, false},
+    {"gesture_whiteboard", "Whiteboard gesture", "gestures", "", 6, 4, 5, 1, GESTURE, 3, false},
 };
 
 // Pro-specific mode mapping and read-modify-write protocol, tested upstream
@@ -40,19 +44,27 @@ static const definition_t definitions[] = {
 // https://github.com/tagawa0525/insta360-link2pro-linux/blob/main/references/README.md
 // Our read-only probe confirms this XU9 GUID, bitmap, INFO=3 and LEN=61.
 // The original Link and Link 2 use different payloads and remain excluded.
+// Gesture selectors are established by static inspection of the macOS SDK at commit
+// 2dd2c78186b0335a530042ae49accbef249d6a95: EnableAllGesture uses selector
+// 0x1b, LE16 length 2 and bit 4; EnableGestureWork uses selector 5, length 1,
+// with palm/zoom/whiteboard in bits 1/2/3. This protocol is not hardware tested.
 static const uint8_t mode_guid[] = {
     0x2d, 0x67, 0xf1, 0xfa, 0x1b, 0xb7, 0x93, 0x47,
     0x8c, 0x91, 0x7b, 0x1c, 0x9b, 0x7f, 0x95, 0xf8
 };
-enum { MODE_DEFINITION = sizeof(definitions) / sizeof(definitions[0]) - 1 };
+enum { AI_MODE_DEFINITION = 16, GESTURE_MASTER_DEFINITION = 17,
+       GESTURE_PALM_DEFINITION = 18, GESTURE_ZOOM_DEFINITION = 19,
+       GESTURE_WHITEBOARD_DEFINITION = 20 };
 
-static bool mode_descriptor(const uint8_t *d, size_t n) {
-    if (n < 24 || d[3] != 9 || memcmp(d + 4, mode_guid, sizeof(mode_guid)))
+static bool xu_descriptor(const uint8_t *d, size_t n, unsigned selector) {
+    if (!selector || n < 24 || d[3] != 9 || memcmp(d + 4, mode_guid, sizeof(mode_guid)))
         return false;
     size_t pins = d[21];
     if (!pins || n < 24 + pins) return false;
     size_t bytes = d[22 + pins];
-    return bytes && n == 24 + pins + bytes && (d[23 + pins] & 2);
+    unsigned bit = selector - 1;
+    return bit / 8 < bytes && n == 24 + pins + bytes &&
+           (d[23 + pins + bit / 8] & (1u << (bit % 8)));
 }
 
 static uint16_t le16(const uint8_t *p) {
@@ -79,7 +91,7 @@ int settings_discover_for_device(settings_t *s, const uint8_t *data, size_t leng
     bool in_vc = false, seen_vc = false, seen_ct = false, seen_pu = false;
     uint8_t interface = 0;
     uint16_t version = 0;
-    bool mode_candidate = false;
+    bool vendor_candidate[5] = {false};
     unsigned mode_entities = 0;
     uint8_t mode_interface = 0;
     for (size_t pos = 0; pos < length;) {
@@ -105,8 +117,10 @@ int settings_discover_for_device(settings_t *s, const uint8_t *data, size_t leng
                 if (n < 12) goto invalid;
                 version = le16(d + 3);
             } else if (d[2] == 6) {
-                if (vendor == 0x2e1a && product == 0x4c06 && mode_descriptor(d, n)) {
-                    mode_candidate = true;
+                if (vendor == 0x2e1a && product == 0x4c06) {
+                    const unsigned selectors[] = {2, 0x1b, 5, 5, 5};
+                    for (unsigned i = 0; i < sizeof(selectors) / sizeof(selectors[0]); ++i)
+                        vendor_candidate[i] |= xu_descriptor(d, n, selectors[i]);
                     mode_interface = interface;
                 }
             } else if (d[2] == 2 || d[2] == 5) {
@@ -139,12 +153,16 @@ int settings_discover_for_device(settings_t *s, const uint8_t *data, size_t leng
         pos += n;
     }
     if (!seen_vc || !version) goto invalid;
-    if (mode_candidate && mode_entities == 1) {
-        if (s->count == SETTINGS_MAX_CONTROLS) goto invalid;
-        s->controls[s->count++] = (setting_control_t){
-            .definition = MODE_DEFINITION, .interface = mode_interface,
-            .unit = 9, .version = version
-        };
+    if (mode_entities == 1) {
+        const unsigned vendor_definitions[] = {AI_MODE_DEFINITION, GESTURE_MASTER_DEFINITION,
+            GESTURE_PALM_DEFINITION, GESTURE_ZOOM_DEFINITION, GESTURE_WHITEBOARD_DEFINITION};
+        for (unsigned i = 0; i < sizeof(vendor_definitions) / sizeof(vendor_definitions[0]); ++i) {
+            if (vendor_candidate[i]) {
+                if (s->count == SETTINGS_MAX_CONTROLS) goto invalid;
+                s->controls[s->count++] = (setting_control_t){.definition = vendor_definitions[i],
+                    .interface = mode_interface, .unit = 9, .version = version};
+            }
+        }
     }
     s->error = NULL;
     return 0;
@@ -218,6 +236,34 @@ static void refresh_mode(settings_t *s, setting_control_t *c) {
         c->error = "Camera returned an unrecognized whiteboard detection state";
 }
 
+static void refresh_gesture(settings_t *s, setting_control_t *c) {
+    const definition_t *d = &definitions[c->definition];
+    c->minimum = 0;
+    c->maximum = 1;
+    c->step = 1;
+    c->valid_range = true;
+    int64_t info = 0, length = 0;
+    if (query(s, c, GET_INFO, &info)) {
+        c->error = "Gesture GET_INFO failed";
+        return;
+    }
+    c->readable = (info & 1) != 0;
+    c->active = (info & 0x24) == 0;
+    if (query(s, c, GET_LEN, &length) || length != d->width) {
+        c->error = "Gesture GET_LEN failed or reported an unsupported length";
+        return;
+    }
+    if (!c->readable || transfer(s, c, GET_CUR, c->payload, d->width)) {
+        c->error = "Gesture current value could not be read";
+        return;
+    }
+    c->has_value = true;
+    c->value = (c->payload[d->value_bit / 8] >> (d->value_bit % 8)) & 1;
+    // Only an exact synchronous GET/SET capability is safe for RMW writes.
+    c->writable = info == 3 && c->active;
+    if (!c->writable) c->error = "Gesture control is read-only or disabled by camera";
+}
+
 static const char *mode_detail(const setting_control_t *c) {
     if (!c->has_value) return "Link 2 Pro AI modes require an active video stream.";
     if (c->value == 255)
@@ -268,6 +314,10 @@ static int refresh(settings_t *s) {
         c->error = NULL;
         if (d->kind == AI_MODE) {
             refresh_mode(s, c);
+            continue;
+        }
+        if (d->kind == GESTURE) {
+            refresh_gesture(s, c);
             continue;
         }
         int64_t info = 0;
@@ -357,7 +407,8 @@ static cJSON *snapshot_json(settings_t *s) {
             cJSON_AddBoolToObject(item, "pending", c->has_value &&
                 (c->value == 255 || (c->value == 4 && c->payload[1] <= 1)));
         }
-        cJSON_AddStringToObject(item, "kind", d->kind == INTEGER ? "integer" : d->kind == BOOLEAN ? "boolean" : "enum");
+        cJSON_AddStringToObject(item, "kind", d->kind == INTEGER ? "integer" :
+            (d->kind == BOOLEAN || d->kind == GESTURE) ? "boolean" : "enum");
         if (c->has_value) cJSON_AddNumberToObject(item, "value", (double)c->value);
         else cJSON_AddNullToObject(item, "value");
         cJSON_AddNumberToObject(item, "min", (double)c->minimum);
@@ -415,6 +466,11 @@ cJSON *settings_set(settings_t *s, const char *id, int64_t value) {
         memcpy(data, c->payload, sizeof(c->payload));
         data[0] = (uint8_t)value;
         data[1] = value == 5 ? 3 : 0;
+    } else if (d->kind == GESTURE) {
+        // Preserve every undocumented flag in the selector payload.
+        memcpy(data, c->payload, d->width);
+        if (value) data[d->value_bit / 8] |= 1u << (d->value_bit % 8);
+        else data[d->value_bit / 8] &= ~(1u << (d->value_bit % 8));
     } else {
         for (unsigned i = 0; i < d->width; ++i) data[i] = (uint32_t)value >> (8 * i);
     }
@@ -426,6 +482,8 @@ cJSON *settings_set(settings_t *s, const char *id, int64_t value) {
     if (d->kind == AI_MODE && c->has_value && c->value == 255) return snapshot_json(s);
     if (!c->has_value || !valid_value(c, c->value))
         return settings_error("Setting was written but its readback failed or was invalid");
+    if (d->kind == GESTURE && c->value != value)
+        return settings_error("Gesture setting was written but its readback did not match");
     // Mode changes are asynchronous: even the previous mode can be read before
     // 255 appears. Return actual state; the client tracks its requested target
     // and bounds polling rather than treating this snapshot as completion.

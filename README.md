@@ -36,11 +36,14 @@ preview, image settings, and AI modes, all using the app's existing connection.
 | Zoom | 100–400% |
 | Image settings | Device-discovered color, focus, and white balance controls |
 | Link 2 Pro modes | Normal, tracking, DeskView, overhead, automatic whiteboard |
+| Link 2 Pro gestures | Master enable/disable and individual palm, L, and V gesture switches |
 | Menu bar | Common controls, preview, status, and dashboard reopening |
 | Raycast | 13 bundled Script Commands; no separate daemon required |
 
 Available image controls depend on the camera. Tracking speed/framing, gesture
-configuration, proprietary exposure/ISO, and HDR are not implemented.
+bindings, proprietary exposure/ISO, and HDR are not implemented. Gesture switches
+use the official SDK protocol with USB readback; physical behavior and power-cycle
+persistence still need verification on the connected camera.
 See the [documentation index](docs/README.md) for usage, protocols, and release steps.
 
 **Model compatibility:** the GUI automatically detects the original Link

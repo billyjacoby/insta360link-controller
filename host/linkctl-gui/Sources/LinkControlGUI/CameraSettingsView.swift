@@ -47,13 +47,23 @@ struct CameraSettingsView: View {
                                 Text("Keep preview running when changing camera modes. Use Refresh to read changes made by gestures or another controller.")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
+                            if group == .gestures {
+                                Text("Turn off Enable gesture control to prevent hand gestures from changing camera modes or zoom. Individual switches are remembered separately; turning the master switch off does not clear them.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             ForEach(controls) { control in
                                 CameraSettingRow(control: control)
                             }
                             if group == .ai {
                                 Text("Tracking needs a person in view. DeskView rotates video; use the jog controls to tilt down after switching. Overhead moves the camera down automatically. Whiteboard detects a board already in frame.")
                                     .font(.caption).foregroundStyle(.secondary)
-                                Text("Tracking speed, framing, target selection, and gesture configuration still need verified Pro commands. This controls the camera’s Whiteboard mode, without the official app’s Virtual Camera features.")
+                                Text("Tracking speed, framing, target selection, and gesture bindings are not available. This controls the camera’s Whiteboard mode, without the official app’s Virtual Camera features.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            if group == .gestures {
+                                Text("The individual switches control palm, L (zoom), and V (whiteboard) gestures. Actions may differ if another app changed gesture bindings.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Text("Disabling gestures does not stop a mode already running. Select Normal above to stop tracking or another special mode. Keep a video stream running when changing settings; persistence after unplugging depends on camera firmware.")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }

@@ -68,7 +68,7 @@ a newly connected camera.
 
 ## Beyond standard UVC
 
-Exposure/ISO, HDR, gesture controls, tracking speed/framing/targets, presets,
+Exposure/ISO, HDR, gesture bindings, tracking speed/framing/targets, presets,
 and firmware management require separate model-specific verification. Existing
 public interoperability work gives useful leads, but a mapping tested on Link or
 Link 2 is not automatically verified on Link 2 Pro.
@@ -78,6 +78,13 @@ the separately documented 61-byte Pro mode protocol. See
 [AI camera controls](ai-camera-controls.md) for the mode schema, evidence, and
 remaining unsupported features. The mode picker uses the same settings transport,
 with ID `ai_mode` and group `ai`.
+
+Link 2 Pro gesture switches use group `gestures`: `gesture_control` (master),
+`gesture_palm`, `gesture_zoom` (L), and `gesture_whiteboard` (V), all Boolean values
+`0`/`1`. Their protocol is established by static inspection of the official SDK;
+physical behavior is not yet verified locally. See [gesture protocol evidence](ai-camera-controls.md#gesture-switch-protocol).
+Writes preserve unrelated register bits and require readback. No factory default
+is invented, and connection/reconnection never reapplies old gesture preferences.
 
 Research references (consulted September 2026):
 

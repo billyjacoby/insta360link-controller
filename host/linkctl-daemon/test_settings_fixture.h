@@ -10,11 +10,13 @@ typedef struct {
 
 typedef struct {
     settings_t settings;
-    fake_control_t controls[16];
+    fake_control_t controls[20];
     unsigned count, reads, writes, mode_reads;
     uint8_t last_data[SETTINGS_MODE_LENGTH], last_width, last_interface, last_unit, last_selector;
-    bool disconnected, fail_readback, clamp_write, ignore_mode_write, transition_mode_write;
+    bool disconnected, fail_readback, clamp_write, ignore_mode_write, ignore_gesture_write, transition_mode_write;
     uint16_t mode_length;
+    uint16_t gesture_master_length;
+    uint8_t gesture_payload[2], gesture_flags, gesture_length;
     uint8_t mode_payload[SETTINGS_MODE_LENGTH];
     uint8_t descriptors[256];
     size_t descriptor_length;

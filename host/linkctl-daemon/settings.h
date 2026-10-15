@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <cjson/cJSON.h>
 
-#define SETTINGS_MAX_CONTROLS 17
+#define SETTINGS_MAX_CONTROLS 21
 #define SETTINGS_IO_DISCONNECTED (-2)
 #define SETTINGS_MODE_LENGTH 61
 

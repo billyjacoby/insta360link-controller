@@ -17,11 +17,12 @@ static int fake_io(void *context, uint8_t interface, uint8_t unit,
     assert(c); // Never address unadvertised controls.
     assert(width == (request == 0x86 ? 1 : request == 0x85 ? 2 : c->width));
     bool mode = c->width == SETTINGS_MODE_LENGTH;
+    bool gesture = f->gesture_length && unit == 9 && (selector == 0x1b || selector == 5);
     if (mode) {
         assert(unit == 9);
         assert(selector == 2);
         assert(request == 1 || request == 0x81 || request == 0x85 || request == 0x86);
-    } else {
+    } else if (!gesture) {
         assert(request != 0x85); // GET_LEN is not a standard-control query.
     }
     if (f->disconnected) return SETTINGS_IO_DISCONNECTED;
@@ -36,6 +37,14 @@ static int fake_io(void *context, uint8_t interface, uint8_t unit,
         if (mode) {
             if (!f->ignore_mode_write) memcpy(f->mode_payload, data, width);
             if (f->transition_mode_write) f->mode_payload[0] = 255;
+            if (f->fail_readback) c->fail_request = 0x81;
+            return 0;
+        }
+        if (gesture) {
+            if (!f->ignore_gesture_write) {
+                if (selector == 0x1b) memcpy(f->gesture_payload, data, width);
+                else f->gesture_flags = data[0];
+            }
             if (f->fail_readback) c->fail_request = 0x81;
             return 0;
         }
@@ -54,13 +63,19 @@ static int fake_io(void *context, uint8_t interface, uint8_t unit,
         memcpy(data, f->mode_payload, width);
         return 0;
     }
+    if (gesture && request == 0x81) {
+        if (selector == 0x1b) memcpy(data, f->gesture_payload, width);
+        else data[0] = f->gesture_flags;
+        return 0;
+    }
     int64_t value;
     switch (request) {
     case 0x81: value = c->value; break;
     case 0x82: assert(c->width != 1); value = c->minimum; break;
     case 0x83: assert(c->width != 1); value = c->maximum; break;
     case 0x84: assert(c->width != 1 || (unit == 7 && selector == 2)); value = c->step; break;
-    case 0x85: assert(mode); value = f->mode_length; break;
+    case 0x85: assert(mode || gesture); value = mode ? f->mode_length :
+        selector == 0x1b ? f->gesture_master_length : f->gesture_length; break;
     case 0x86: value = c->info; break;
     case 0x87: assert(!(unit == 7 && selector == 3)); value = c->default_value; break;
     default: assert(0); return -1;
@@ -129,11 +144,18 @@ void fake_camera_init_modes(fake_camera_t *f) {
     f->descriptors[2] = f->descriptor_length;
     f->descriptors[3] = f->descriptor_length >> 8;
     f->controls[f->count++] = (fake_control_t){9, 2, SETTINGS_MODE_LENGTH, 3, 0, 0, 0, 6, 1, 0};
+    f->controls[f->count++] = (fake_control_t){9, 0x1b, 2, 3, 0, 0, 0, 0, 1, 0};
+    f->controls[f->count++] = (fake_control_t){9, 5, 1, 3, 0, 0, 0, 0, 1, 0};
     f->mode_length = SETTINGS_MODE_LENGTH;
+    f->gesture_master_length = 2;
+    f->gesture_length = 1;
     // Distinct nonzero bytes catch destructive zero-fill or short mode writes.
     for (unsigned i = 2; i < sizeof(f->mode_payload); ++i) f->mode_payload[i] = 7 * i + 19;
     f->mode_payload[1] = 3; // Normal legitimately retains stale Whiteboard flags.
+    f->gesture_payload[0] = 0xa1; // Exercise RMW preservation of unrelated bits.
+    f->gesture_payload[1] = 0x80;
+    f->gesture_flags = 0xa1;
     assert(settings_discover_for_device(&f->settings, f->descriptors, f->descriptor_length,
                                        0x2e1a, 0x4c06) == 0);
-    assert(f->settings.count == f->count);
+    assert(f->settings.count == f->count + 2); // Three feature bits share selector 5.
 }

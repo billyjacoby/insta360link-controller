@@ -33,7 +33,7 @@ The USB request helper accepts only device-to-host `GET_INFO`, `GET_LEN`, and
 two-byte zoom `GET_CUR`. With `--ai`, it also reads selected mode/tracking/gesture
 candidate registers, gated on their advertised capability and exact Pro lengths:
 XU9 selectors `02` (61 bytes), `05` (1), `06` (5), `12` (1), `13` (1), `15` (16),
-`18` (4), plus readable one-byte XU11 selectors `01`–`05`. Unknown semantics stay
+`18` (4), `1b` (2), plus readable one-byte XU11 selectors `01`–`05`. Unknown semantics stay
 unknown; this is a diagnostic capture, not a list of working AI controls. See
 [AI protocol findings](../../docs/ai-camera-controls.md).
 There is no `SET_CUR`, movement, center, stop, reset,

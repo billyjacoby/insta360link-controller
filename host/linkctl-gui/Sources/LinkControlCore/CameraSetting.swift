@@ -3,11 +3,12 @@ import Foundation
 /// A control advertised by the camera, never a fabricated capability.
 public struct CameraSetting: Decodable, Equatable, Identifiable, Sendable {
     public enum Group: String, Decodable, CaseIterable, Sendable {
-        case ai, image, whiteBalance = "white_balance", focus, exposure
+        case ai, gestures, image, whiteBalance = "white_balance", focus, exposure
 
         public var title: String {
             switch self {
             case .ai: "AI tracking & camera modes"
+            case .gestures: "Gesture control"
             case .image: "Image"
             case .whiteBalance: "White balance"
             case .focus: "Focus"
@@ -102,7 +103,8 @@ public struct CameraSetting: Decodable, Equatable, Identifiable, Sendable {
         "brightness", "contrast", "hue", "saturation", "sharpness", "gamma", "gain",
         "backlight_compensation", "power_line_frequency", "white_balance_temperature",
         "white_balance_auto", "focus_absolute", "focus_auto", "exposure_mode",
-        "exposure_absolute", "exposure_auto_priority", "ai_mode"
+        "exposure_absolute", "exposure_auto_priority", "ai_mode",
+        "gesture_control", "gesture_palm", "gesture_zoom", "gesture_whiteboard"
     ]
 }
 

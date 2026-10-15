@@ -113,7 +113,7 @@ automatic modes are turned off.
   across power cycles depends on the camera firmware.
 
 Some official-app features, including proprietary exposure controls, HDR,
-tracking speed/framing/targets, and gesture configuration, still require
+tracking speed/framing/targets, and gesture bindings, still require
 model-specific integration. Standard
 exposure controls appear only when advertised by the connected camera. See
 [settings support and protocol notes](../../docs/camera-settings.md).
@@ -144,10 +144,25 @@ descriptor, capability, and buffer-length checks on this camera. It preserves th
 other bytes in the camera's 61-byte state buffer. Local verification has read that
 state; visible behavior of the new modes still needs confirmation on this camera.
 
-Speed, framing/target selection, and gesture configuration are not implemented:
+Speed, framing/target selection, and gesture bindings are not implemented:
 there is no verified Pro command for them yet. This also does not implement the
 official software's Virtual Camera or a manual whiteboard corner editor. See
 [AI protocol evidence and limitations](../../docs/ai-camera-controls.md).
+
+## Gesture control
+
+On compatible Link 2 Pro cameras, open **Camera settings → Gesture control** and
+turn **Enable gesture control** off to prevent accidental gesture-triggered mode/zoom changes.
+Separate palm, L (zoom), and V (whiteboard) switches allow selective disabling.
+The master switch does not clear the individual preferences. Gesture bindings are
+not edited by this app, so the official app can assign different gesture actions.
+
+Turning gestures off does not exit an already active mode; select **Normal** to do
+that. Keep a video stream running while changing settings. Refresh reads the camera's
+current state; failed writes are not displayed as successful changes. Settings are
+not automatically restored on reconnection, and persistence across power cycles is
+firmware-dependent. The protocol comes from Insta360's official SDK, which explicitly
+accepts this model; physical gesture behavior still needs confirmation on this camera.
 
 ## Building from source (developers)
 
